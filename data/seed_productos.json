@@ -1,0 +1,204 @@
+{
+  "productos": [
+    {
+      "id": 1,
+      "nombre": "zapatillas",
+      "marca": "Nike",
+      "talla": "40",
+      "color": "negro",
+      "precio": 250.00,
+      "stock": 5,
+      "categoria": "calzado"
+    },
+    {
+      "id": 2,
+      "nombre": "zapatillas",
+      "marca": "Nike",
+      "talla": "42",
+      "color": "negro",
+      "precio": 250.00,
+      "stock": 3,
+      "categoria": "calzado"
+    },
+    {
+      "id": 3,
+      "nombre": "zapatillas",
+      "marca": "Nike",
+      "talla": "38",
+      "color": "blanco",
+      "precio": 230.00,
+      "stock": 0,
+      "categoria": "calzado"
+    },
+    {
+      "id": 4,
+      "nombre": "zapatillas",
+      "marca": "Adidas",
+      "talla": "39",
+      "color": "blanco",
+      "precio": 220.00,
+      "stock": 2,
+      "categoria": "calzado"
+    },
+    {
+      "id": 5,
+      "nombre": "zapatillas",
+      "marca": "Adidas",
+      "talla": "40",
+      "color": "negro",
+      "precio": 220.00,
+      "stock": 1,
+      "categoria": "calzado"
+    },
+    {
+      "id": 6,
+      "nombre": "zapatillas",
+      "marca": "Adidas",
+      "talla": "42",
+      "color": "rojo",
+      "precio": 240.00,
+      "stock": 4,
+      "categoria": "calzado"
+    },
+    {
+      "id": 7,
+      "nombre": "polo",
+      "marca": "Lacoste",
+      "talla": "M",
+      "color": "azul",
+      "precio": 120.00,
+      "stock": 3,
+      "categoria": "ropa"
+    },
+    {
+      "id": 8,
+      "nombre": "polo",
+      "marca": "Lacoste",
+      "talla": "L",
+      "color": "azul",
+      "precio": 120.00,
+      "stock": 2,
+      "categoria": "ropa"
+    },
+    {
+      "id": 9,
+      "nombre": "polo",
+      "marca": "Lacoste",
+      "talla": "M",
+      "color": "blanco",
+      "precio": 110.00,
+      "stock": 0,
+      "categoria": "ropa"
+    },
+    {
+      "id": 10,
+      "nombre": "polo",
+      "marca": "Tommy Hilfiger",
+      "talla": "M",
+      "color": "rojo",
+      "precio": 150.00,
+      "stock": 1,
+      "categoria": "ropa"
+    },
+    {
+      "id": 11,
+      "nombre": "polo",
+      "marca": "Tommy Hilfiger",
+      "talla": "L",
+      "color": "azul",
+      "precio": 150.00,
+      "stock": 2,
+      "categoria": "ropa"
+    },
+    {
+      "id": 12,
+      "nombre": "jean",
+      "marca": "Levi's",
+      "talla": "32",
+      "color": "azul oscuro",
+      "precio": 180.00,
+      "stock": 3,
+      "categoria": "ropa"
+    },
+    {
+      "id": 13,
+      "nombre": "jean",
+      "marca": "Levi's",
+      "talla": "34",
+      "color": "azul oscuro",
+      "precio": 180.00,
+      "stock": 1,
+      "categoria": "ropa"
+    },
+    {
+      "id": 14,
+      "nombre": "jean",
+      "marca": "Levi's",
+      "talla": "30",
+      "color": "negro",
+      "precio": 190.00,
+      "stock": 0,
+      "categoria": "ropa"
+    },
+    {
+      "id": 15,
+      "nombre": "medias",
+      "marca": "Puma",
+      "talla": "única",
+      "color": "blanco",
+      "precio": 25.00,
+      "stock": 20,
+      "categoria": "accesorios"
+    },
+    {
+      "id": 16,
+      "nombre": "medias",
+      "marca": "Puma",
+      "talla": "única",
+      "color": "negro",
+      "precio": 25.00,
+      "stock": 15,
+      "categoria": "accesorios"
+    },
+    {
+      "id": 17,
+      "nombre": "medias",
+      "marca": "Adidas",
+      "talla": "única",
+      "color": "blanco",
+      "precio": 30.00,
+      "stock": 8,
+      "categoria": "accesorios"
+    },
+    {
+      "id": 18,
+      "nombre": "gorra",
+      "marca": "New Era",
+      "talla": "única",
+      "color": "negro",
+      "precio": 80.00,
+      "stock": 4,
+      "categoria": "accesorios"
+    },
+    {
+      "id": 19,
+      "nombre": "gorra",
+      "marca": "Nike",
+      "talla": "única",
+      "color": "blanco",
+      "precio": 75.00,
+      "stock": 0,
+      "categoria": "accesorios"
+    },
+    {
+      "id": 20,
+      "nombre": "casaca",
+      "marca": "North Face",
+      "talla": "M",
+      "color": "negro",
+      "precio": 350.00,
+      "stock": 2,
+      "categoria": "ropa"
+    }
+  ]
+}
