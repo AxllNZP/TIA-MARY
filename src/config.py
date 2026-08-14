@@ -28,7 +28,9 @@ FEEDBACK_PATH = "data/feedback.jsonl"
 import os
 
 # Servidor Flask
-FLASK_HOST = "0.0.0.0"
+# Host seguro por defecto (solo localhost). Para exponer en LAN/red publica,
+# debe declararse explicitamente: FLASK_HOST=0.0.0.0
+FLASK_HOST = os.environ.get("FLASK_HOST", "127.0.0.1")
 FLASK_PORT = 5000
 # DEBUG solo se activa si se declara explicitamente (ej. desarrollo local).
 # Por defecto, desactivado -> evita exponer el debugger de Werkzeug.
