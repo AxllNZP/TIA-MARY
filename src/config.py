@@ -25,7 +25,11 @@ SEED_DATA_PATH = "data/seed_productos.json"
 # Historial de aprendizaje
 FEEDBACK_PATH = "data/feedback.jsonl"
 
+import os
+
 # Servidor Flask
 FLASK_HOST = "0.0.0.0"
 FLASK_PORT = 5000
-FLASK_DEBUG = True
+# DEBUG solo se activa si se declara explicitamente (ej. desarrollo local).
+# Por defecto, desactivado -> evita exponer el debugger de Werkzeug.
+FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
