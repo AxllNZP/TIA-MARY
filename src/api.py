@@ -13,12 +13,30 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
+import hmac
+
 from . import database as db
-from .config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, NOMBRE_TIENDA
+from .config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, NOMBRE_TIENDA, ADMIN_API_TOKEN
 from .learning import engine as learning_engine
 from .pipeline import pipeline
 
 app = Flask(__name__)
+
+
+def _autenticacion_admin_valida() -> bool:
+    """
+    Valida el header 'Authorization: Bearer <token>' contra ADMIN_API_TOKEN.
+    Fail-closed: si ADMIN_API_TOKEN no esta configurado, siempre rechaza.
+    """
+    if not ADMIN_API_TOKEN:
+        return False
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return False
+
+    token_recibido = auth_header[len("Bearer "):].strip()
+    return hmac.compare_digest(token_recibido, ADMIN_API_TOKEN)
 
 # ─── ADMIN DASHBOARD HTML ───
 
@@ -363,13 +381,16 @@ def feedback():
 
 @app.route("/api/pautas", methods=["GET", "POST"])
 def pautas():
-    """GET: lista pautas activas. POST: crea nueva pauta."""
+    """GET: lista pautas activas. POST: crea nueva pauta (requiere admin)."""
     if request.method == "GET":
         tipo = request.args.get("tipo")
         pautas_list = db.get_pautas_activas(tipo=tipo if tipo else None)
         return jsonify([dict(p) for p in pautas_list])
 
-    # POST
+    # POST — requiere autenticacion de administrador antes de persistir nada
+    if not _autenticacion_admin_valida():
+        return jsonify({"error": "No autorizado"}), 401
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "JSON inválido"}), 400

@@ -35,3 +35,9 @@ FLASK_PORT = 5000
 # DEBUG solo se activa si se declara explicitamente (ej. desarrollo local).
 # Por defecto, desactivado -> evita exponer el debugger de Werkzeug.
 FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+
+
+# Token de administrador para proteger endpoints sensibles (ej. /api/pautas).
+# Sin valor por defecto utilizable: si no se configura, el endpoint protegido
+# debe rechazar todas las solicitudes (fail-closed), nunca fail-open.
+ADMIN_API_TOKEN = os.environ.get("ADMIN_API_TOKEN")

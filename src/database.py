@@ -172,16 +172,16 @@ def buscar_producto(
             params.append(f"%{nombre.lower()}%")
 
         if marca:
-            conditions.append("LOWER(marca) LIKE ?")
-            params.append(f"%{marca.lower()}%")
+            conditions.append("LOWER(marca) = ?")
+            params.append(marca.lower())
 
         if talla:
-            conditions.append("LOWER(talla) LIKE ?")
-            params.append(f"%{talla.lower()}%")
+            conditions.append("LOWER(talla) = ?")
+            params.append(talla.lower())
 
         if color:
-            conditions.append("LOWER(color) LIKE ?")
-            params.append(f"%{color.lower()}%")
+            conditions.append("LOWER(color) = ?")
+            params.append(color.lower())
 
         where_clause = " AND ".join(conditions)
 
@@ -210,18 +210,32 @@ def buscar_producto(
                 "producto_exacto": dict(primer_producto),
             }
 
-        # Fallback 1: Busqueda parcial solo por nombre
+        # Fallback 1: Busqueda parcial por nombre, manteniendo los demas
+        # filtros ya especificados (marca, talla, color) como exactos.
         if nombre:
+            fallback_conditions = ["activo = 1", "LOWER(nombre) LIKE ?"]
+            fallback_params = [f"%{nombre.lower()}%"]
+
+            if marca:
+                fallback_conditions.append("LOWER(marca) = ?")
+                fallback_params.append(marca.lower())
+            if talla:
+                fallback_conditions.append("LOWER(talla) = ?")
+                fallback_params.append(talla.lower())
+            if color:
+                fallback_conditions.append("LOWER(color) = ?")
+                fallback_params.append(color.lower())
+
             cursor = conn.execute(
-                "SELECT * FROM productos WHERE activo = 1 AND LOWER(nombre) LIKE ?",
-                [f"%{nombre.lower()}%"],
+                f"SELECT * FROM productos WHERE {' AND '.join(fallback_conditions)}",
+                fallback_params,
             )
             parciales = cursor.fetchall()
 
             if parciales:
                 total_stock = sum(r["stock"] for r in parciales)
                 primer_producto = parciales[0]
-                variantes = _get_variantes(conn, nombre, None)
+                variantes = _get_variantes(conn, nombre, marca)
                 variantes_str = _format_variantes(variantes, parciales)
 
                 return {
@@ -233,21 +247,36 @@ def buscar_producto(
                 }
 
             # Fallback 2: Si el nombre es compuesto (ej: "zapatillas nike"),
-            # intentar con cada palabra individual
+            # intentar con cada palabra individual, manteniendo marca/talla/color
+            # ya especificados como filtros exactos.
             palabras = nombre.lower().split()
             if len(palabras) > 1:
                 for palabra in palabras:
                     if len(palabra) < 3:
                         continue  # ignorar palabras muy cortas
+
+                    palabra_conditions = ["activo = 1", "LOWER(nombre) LIKE ?"]
+                    palabra_params = [f"%{palabra}%"]
+
+                    if marca:
+                        palabra_conditions.append("LOWER(marca) = ?")
+                        palabra_params.append(marca.lower())
+                    if talla:
+                        palabra_conditions.append("LOWER(talla) = ?")
+                        palabra_params.append(talla.lower())
+                    if color:
+                        palabra_conditions.append("LOWER(color) = ?")
+                        palabra_params.append(color.lower())
+
                     cursor = conn.execute(
-                        "SELECT * FROM productos WHERE activo = 1 AND LOWER(nombre) LIKE ?",
-                        [f"%{palabra}%"],
+                        f"SELECT * FROM productos WHERE {' AND '.join(palabra_conditions)}",
+                        palabra_params,
                     )
                     parciales = cursor.fetchall()
                     if parciales:
                         total_stock = sum(r["stock"] for r in parciales)
                         primer_producto = parciales[0]
-                        variantes = _get_variantes(conn, palabra, None)
+                        variantes = _get_variantes(conn, palabra, marca)
                         variantes_str = _format_variantes(variantes, parciales)
 
                         return {
