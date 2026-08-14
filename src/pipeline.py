@@ -16,6 +16,7 @@ from .learning import engine as learning_engine
 from .ollama_client import OllamaClient
 from .planner import Planner
 from .responder import Responder
+from .session_store import session_store
 
 
 # Productos que la tienda NO vende (para respuestas rapidas sin LLM)
@@ -60,19 +61,8 @@ class Pipeline:
         self.responder = Responder(client=self.client)
         self._pautas_planner_cache = ""
         self._pautas_responder_cache = ""
-        # Memoria conversacional por sesion: guarda atributos heredados
-        self._contexto_sesion = {
-            "producto": None,
-            "marca": None,
-            "talla": None,
-            "color": None,
-            "modelo": None,
-            "material": None,
-            "genero": None,
-            "cantidad_disponible": None,
-            "variantes": None,
-            "precio": None,
-        }
+        # Contexto e historial ya NO son estado de instancia: se leen/escriben
+        # por session_id via session_store, aislados entre usuarios.
         # Historial de chat: ultimos 10 mensajes (5 turnos cliente+asistente)
         self._historial_chat = []
 
@@ -98,24 +88,24 @@ class Pipeline:
         msg = mensaje.lower().strip()
         return any(p in msg for p in PALABRAS_CATALOGO)
 
-    def _parece_seguimiento(self, mensaje: str) -> bool:
+    def _parece_seguimiento(self, mensaje: str, contexto: dict) -> bool:
         """
         Detecta si el mensaje parece una pregunta de seguimiento.
         Se usa como fallback de emergencia cuando el Planner devuelve no_relacionado
         pero hay contexto previo en la sesion.
         """
-        if not self._contexto_sesion.get("producto"):
+        if not contexto.get("producto"):
             return False
         msg = mensaje.lower().strip()
         return len(msg.split()) <= 6 and any(p in msg for p in PALABRAS_SEGUIMIENTO)
 
-    def _merge_atributos(self, plan: dict) -> dict:
+    def _merge_atributos(self, plan: dict, contexto: dict) -> dict:
         """
         Fusiona los atributos del plan del Planner con el contexto de sesion.
         Solo actualiza los atributos que el Planner extrajo (no None).
         Los atributos None se heredan del contexto anterior.
         """
-        merged = dict(self._contexto_sesion)  # Copiar contexto actual
+        merged = dict(contexto)  # Copiar contexto actual
 
         # Actualizar solo los atributos que el Planner extrajo
         for key in ["producto", "marca", "talla", "color", "modelo", "material", "genero"]:
@@ -124,7 +114,7 @@ class Pipeline:
                 merged[key] = value
 
         # Si el producto cambio, resetear atributos especificos
-        if plan.get("producto") and plan.get("producto") != self._contexto_sesion.get("producto"):
+        if plan.get("producto") and plan.get("producto") != contexto.get("producto"):
             # El usuario cambio de producto: resetear atributos no mencionados
             for key in ["marca", "talla", "color", "modelo", "material", "genero"]:
                 if plan.get(key) is None:
@@ -132,13 +122,13 @@ class Pipeline:
 
         return merged
 
-    def _fallback_seguimiento(self, mensaje: str) -> dict:
+    def _fallback_seguimiento(self, mensaje: str, contexto: dict) -> dict:
         """
         Fallback de emergencia: genera una respuesta directa usando el contexto
         de sesion. Se activa solo cuando el Planner con historial devuelve
         no_relacionado pero el mensaje parece de seguimiento.
         """
-        b = self._contexto_sesion
+        b = contexto
         msg = mensaje.lower().strip()
 
         if any(p in msg for p in ["cuantas", "cuantos", "unidades", "cantidad", "disponibles"]):
@@ -191,11 +181,11 @@ class Pipeline:
             "error": None,
         }
 
-    def procesar_mensaje(self, mensaje: str) -> dict:
+    def procesar_mensaje(self, mensaje: str, session_id: str = "default") -> dict:
         """
         Procesa un mensaje completo a traves del pipeline.
         Pasa el historial de conversacion real al Planner y al Responder.
-        Mantiene memoria conversacional por sesion.
+        Mantiene memoria conversacional por sesion, aislada via session_id.
         """
         resultado = {
             "mensaje_cliente": mensaje,
@@ -206,7 +196,9 @@ class Pipeline:
             "error": None,
         }
         mensaje_lower = mensaje.lower().strip()
-
+        contexto = session_store.get_contexto(session_id)
+        historial = session_store.get_historial(session_id)
+        
         try:
             self._refresh_pautas()
 
@@ -425,14 +417,9 @@ class Pipeline:
         self._actualizar_historial(mensaje, resultado.get("respuesta"))
         return resultado
 
-    def _actualizar_historial(self, mensaje_cliente: str, respuesta: str | None):
-        """Actualiza el historial de chat con el mensaje del cliente y la respuesta."""
-        self._historial_chat.append({"role": "user", "content": mensaje_cliente})
-        if respuesta:
-            self._historial_chat.append({"role": "assistant", "content": respuesta})
-        # Mantener solo los ultimos 10 mensajes (5 turnos)
-        if len(self._historial_chat) > 10:
-            self._historial_chat = self._historial_chat[-10:]
+    def _actualizar_historial(self, session_id: str, mensaje_cliente: str, respuesta: str | None):
+        """Actualiza el historial de chat de la sesion con el mensaje del cliente y la respuesta."""
+        session_store.append_historial(session_id, mensaje_cliente, respuesta)
 
 
 # Instancia global para la API

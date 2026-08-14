@@ -276,7 +276,10 @@ def admin():
 def webhook():
     """
     Endpoint para recibir mensajes de WhatsApp (simula Twilio/Meta webhook).
-    Espera JSON: {"mensaje": "texto del cliente"}
+    Espera JSON: {"mensaje": "texto del cliente", "session_id": "numero_whatsapp" (opcional)}
+    session_id debe ser el identificador estable del remitente de WhatsApp
+    (ej. numero de telefono/wa_id) cuando se integre el proveedor real.
+    Si no se envia, se usa "default" (retrocompatible con el simulador actual).
     """
     data = request.get_json(force=True, silent=True)
     if not data or "mensaje" not in data:
@@ -286,7 +289,8 @@ def webhook():
     if not mensaje:
         return jsonify({"error": "El mensaje no puede estar vacío"}), 400
 
-    resultado = pipeline.procesar_mensaje(mensaje)
+    session_id = data.get("session_id") or "default"
+    resultado = pipeline.procesar_mensaje(mensaje, session_id=session_id)
 
     return jsonify(
         {
@@ -303,7 +307,7 @@ def webhook():
 def chat():
     """
     Endpoint para pruebas directas (sin WhatsApp).
-    Espera JSON: {"mensaje": "texto del cliente"}
+    Espera JSON: {"mensaje": "texto del cliente", "session_id": "..." (opcional)}
     Retorna la respuesta + detalles internos.
     """
     data = request.get_json(force=True, silent=True)
@@ -314,7 +318,8 @@ def chat():
     if not mensaje:
         return jsonify({"error": "El mensaje no puede estar vacío"}), 400
 
-    resultado = pipeline.procesar_mensaje(mensaje)
+    session_id = data.get("session_id") or "default"
+    resultado = pipeline.procesar_mensaje(mensaje, session_id=session_id)
 
     return jsonify(
         {
