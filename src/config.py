@@ -41,3 +41,12 @@ FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "y
 # Sin valor por defecto utilizable: si no se configura, el endpoint protegido
 # debe rechazar todas las solicitudes (fail-closed), nunca fail-open.
 ADMIN_API_TOKEN = os.environ.get("ADMIN_API_TOKEN")
+
+# Secreto compartido para verificar la firma HMAC de /api/webhook.
+# Mecanismo generico (no ligado a un proveedor especifico): el proyecto aun
+# no tiene integracion real de Twilio/Meta (ver docstring de webhook() en
+# api.py, que hoy "simula" el proveedor). Cuando se integre un proveedor
+# definitivo, este mecanismo debe sustituirse por su verificacion nativa
+# (ej. X-Twilio-Signature con HMAC-SHA1, o X-Hub-Signature-256 de Meta).
+# Sin valor por defecto utilizable: fail-closed si no se configura.
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")

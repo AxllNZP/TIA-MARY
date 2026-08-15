@@ -13,10 +13,18 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
+import hashlib
 import hmac
 
 from . import database as db
-from .config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, NOMBRE_TIENDA, ADMIN_API_TOKEN
+from .config import (
+    FLASK_HOST,
+    FLASK_PORT,
+    FLASK_DEBUG,
+    NOMBRE_TIENDA,
+    ADMIN_API_TOKEN,
+    WEBHOOK_SECRET,
+)
 from .learning import engine as learning_engine
 from .pipeline import pipeline
 
@@ -37,6 +45,28 @@ def _autenticacion_admin_valida() -> bool:
 
     token_recibido = auth_header[len("Bearer "):].strip()
     return hmac.compare_digest(token_recibido, ADMIN_API_TOKEN)
+
+
+def _firma_webhook_valida(cuerpo_crudo: bytes) -> bool:
+    """
+    Valida la firma HMAC-SHA256 del cuerpo crudo de la solicitud contra
+    WEBHOOK_SECRET, esperada en el header 'X-Webhook-Signature' con formato
+    'sha256=<hex>'. Fail-closed: si WEBHOOK_SECRET no esta configurado,
+    siempre rechaza.
+    """
+    if not WEBHOOK_SECRET:
+        return False
+
+    firma_header = request.headers.get("X-Webhook-Signature", "")
+    if not firma_header.startswith("sha256="):
+        return False
+
+    firma_recibida = firma_header[len("sha256="):].strip()
+    firma_esperada = hmac.new(
+        WEBHOOK_SECRET.encode("utf-8"), cuerpo_crudo, hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(firma_recibida, firma_esperada)
 
 # ─── ADMIN DASHBOARD HTML ───
 
@@ -294,11 +324,16 @@ def admin():
 def webhook():
     """
     Endpoint para recibir mensajes de WhatsApp (simula Twilio/Meta webhook).
+    Requiere firma valida en el header 'X-Webhook-Signature: sha256=<hmac>'
+    calculada sobre el cuerpo crudo con WEBHOOK_SECRET.
     Espera JSON: {"mensaje": "texto del cliente", "session_id": "numero_whatsapp" (opcional)}
     session_id debe ser el identificador estable del remitente de WhatsApp
     (ej. numero de telefono/wa_id) cuando se integre el proveedor real.
     Si no se envia, se usa "default" (retrocompatible con el simulador actual).
     """
+    if not _firma_webhook_valida(request.get_data()):
+        return jsonify({"error": "Firma invalida o ausente"}), 401
+
     data = request.get_json(force=True, silent=True)
     if not data or "mensaje" not in data:
         return jsonify({"error": "Se requiere el campo 'mensaje'"}), 400

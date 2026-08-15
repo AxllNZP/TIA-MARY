@@ -47,6 +47,37 @@ PALABRAS_CATALOGO = [
     "que ropa tienen", "que calzado tienen", "que accesorios tienen",
 ]
 
+# Colores conocidos para extraccion heuristica en el fallback de emergencia
+COLORES_CONOCIDOS = [
+    "negro", "blanco", "azul", "rojo", "verde", "amarillo",
+    "gris", "rosado", "rosa", "morado", "naranja", "beige",
+    "celeste", "marron", "dorado", "plateado",
+]
+
+
+def _extraer_atributos_mensaje(mensaje: str) -> dict:
+    """
+    Extrae heuristicamente talla y color mencionados explicitamente en un
+    mensaje de seguimiento, para usarlos en el fallback de emergencia cuando
+    el Planner (LLM) no logro interpretar el mensaje.
+    Solo se usa como respaldo — el flujo normal usa el Planner con LLM.
+    """
+    import re
+
+    msg = mensaje.lower()
+    atributos = {"talla": None, "color": None}
+
+    match_talla = re.search(r"\btalla\s+([a-z0-9]+)\b|\ben\s+(?:la\s+)?(\d{1,3})\b", msg)
+    if match_talla:
+        atributos["talla"] = match_talla.group(1) or match_talla.group(2)
+
+    for color in COLORES_CONOCIDOS:
+        if color in msg:
+            atributos["color"] = color
+            break
+
+    return atributos
+
 
 class Pipeline:
     """
@@ -121,45 +152,68 @@ class Pipeline:
 
     def _fallback_seguimiento(self, mensaje: str, contexto: dict) -> dict:
         """
-        Fallback de emergencia: genera una respuesta directa usando el contexto
-        de sesion. Se activa solo cuando el Planner con historial devuelve
-        no_relacionado pero el mensaje parece de seguimiento.
+        Fallback de emergencia: reconstruye el plan usando el contexto de
+        sesion + atributos nuevos detectados en el mensaje (con prioridad
+        al dato nuevo), y vuelve a consultar el inventario real via
+        consultar_stock(). Nunca reutiliza cantidad_disponible/precio/
+        variantes del contexto antiguo como si fueran datos actuales.
         """
-        b = contexto
+        atributos_nuevos = _extraer_atributos_mensaje(mensaje)
+
+        plan = {
+            "producto": contexto.get("producto"),
+            "marca": contexto.get("marca"),
+            "talla": atributos_nuevos["talla"] or contexto.get("talla"),
+            "color": atributos_nuevos["color"] or contexto.get("color"),
+        }
+
+        inventario = consultar_stock(plan)
         msg = mensaje.lower().strip()
 
-        if any(p in msg for p in ["cuantas", "cuantos", "unidades", "cantidad", "disponibles"]):
-            if b.get("cantidad_disponible") and b["cantidad_disponible"] > 0:
-                respuesta = (
-                    f"Tenemos {b['cantidad_disponible']} unidad(es) de {b.get('marca') or ''} {b.get('producto')}"
-                    f"{' talla ' + b['talla'] if b.get('talla') else ''}"
-                    f"{' color ' + b['color'] if b.get('color') else ''} disponibles en {NOMBRE_TIENDA}."
-                )
+        if inventario.get("encontrado"):
+            cantidad = inventario.get("cantidad_disponible")
+            precio = inventario.get("precio") or inventario.get("_precio")
+            variantes = inventario.get("variantes_disponibles")
+
+            if any(p in msg for p in ["cuantas", "cuantos", "unidades", "cantidad", "disponibles"]):
+                if cantidad and cantidad > 0:
+                    respuesta = (
+                        f"Tenemos {cantidad} unidad(es) de {plan.get('marca') or ''} {plan.get('producto')}"
+                        f"{' talla ' + plan['talla'] if plan.get('talla') else ''}"
+                        f"{' color ' + plan['color'] if plan.get('color') else ''} disponibles en {NOMBRE_TIENDA}."
+                    )
+                else:
+                    respuesta = (
+                        f"Por el momento no tenemos stock de {plan.get('marca') or ''} {plan.get('producto')}"
+                        f"{' talla ' + plan['talla'] if plan.get('talla') else ''} en {NOMBRE_TIENDA}."
+                    )
+            elif any(p in msg for p in ["precio", "cuesta", "vale", "cuanto esta"]):
+                if precio:
+                    respuesta = (
+                        f"El precio de {plan.get('marca') or ''} {plan.get('producto')}"
+                        f"{' talla ' + plan['talla'] if plan.get('talla') else ''} "
+                        f"es de S/ {precio:.2f} en {NOMBRE_TIENDA}."
+                    )
+                else:
+                    respuesta = f"No tengo el precio exacto en este momento en {NOMBRE_TIENDA}."
+            elif any(p in msg for p in ["talla", "tallas", "otra talla", "otro color", "color", "colores"]):
+                if variantes:
+                    variantes_str = ", ".join(variantes[:6])
+                    respuesta = f"Tenemos disponibles estas variantes de {plan.get('producto')}: {variantes_str}."
+                else:
+                    respuesta = f"De {plan.get('producto')} solo tenemos la talla {plan.get('talla', 'unica')}."
             else:
                 respuesta = (
-                    f"Por el momento no tenemos stock de {b.get('marca') or ''} {b.get('producto')}"
-                    f"{' talla ' + b['talla'] if b.get('talla') else ''} en {NOMBRE_TIENDA}."
+                    f"De {plan.get('marca') or ''} {plan.get('producto')}"
+                    f"{' talla ' + plan['talla'] if plan.get('talla') else ''} "
+                    f"tenemos {cantidad or 0} unidades en {NOMBRE_TIENDA}."
                 )
-        elif any(p in msg for p in ["precio", "cuesta", "vale", "cuanto esta"]):
-            if b.get("precio"):
-                respuesta = (
-                    f"El precio de {b.get('marca') or ''} {b.get('producto')}"
-                    f"{' talla ' + b['talla'] if b.get('talla') else ''} "
-                    f"es de S/ {b['precio']:.2f} en {NOMBRE_TIENDA}."
-                )
-            else:
-                respuesta = f"No tengo el precio exacto en este momento en {NOMBRE_TIENDA}."
-        elif any(p in msg for p in ["talla", "tallas", "otra talla", "otro color", "color", "colores"]):
-            if b.get("variantes"):
-                variantes_str = ", ".join(b["variantes"][:6])
-                respuesta = f"Tenemos disponibles estas variantes de {b.get('producto')}: {variantes_str}."
-            else:
-                respuesta = f"De {b.get('producto')} solo tenemos la talla {b.get('talla', 'unica')}."
         else:
             respuesta = (
-                f"De {b.get('marca') or ''} {b.get('producto')}"
-                f"{' talla ' + b['talla'] if b.get('talla') else ''} "
-                f"tenemos {b.get('cantidad_disponible') or 0} unidades en {NOMBRE_TIENDA}."
+                f"No encontre {plan.get('producto') or 'ese producto'}"
+                f"{' de la marca ' + plan['marca'] if plan.get('marca') else ''}"
+                f"{' talla ' + plan['talla'] if plan.get('talla') else ''}"
+                f"{' color ' + plan['color'] if plan.get('color') else ''} en {NOMBRE_TIENDA}."
             )
 
         return {
@@ -167,13 +221,12 @@ class Pipeline:
             "respuesta": respuesta,
             "planificacion": {
                 "accion": "consultar_stock_seguimiento",
-                "producto": b.get("producto"),
-                "marca": b.get("marca"),
+                "producto": plan.get("producto"),
+                "marca": plan.get("marca"),
+                "talla": plan.get("talla"),
+                "color": plan.get("color"),
             },
-            "inventario": {
-                "encontrado": True,
-                "cantidad_disponible": b.get("cantidad_disponible"),
-            },
+            "inventario": inventario,
             "consulta_id": None,
             "error": None,
         }
@@ -260,14 +313,28 @@ class Pipeline:
                 # el mensaje parece de seguimiento y hay contexto, usar fallback
                 if plan["accion"] == "no_relacionado" and self._parece_seguimiento(mensaje, contexto):
                     resultado = self._fallback_seguimiento(mensaje, contexto)
+                    inventario_fallback = resultado.get("inventario") or {}
                     resultado["consulta_id"] = db.registrar_consulta(
                         mensaje_cliente=mensaje,
                         accion="consultar_stock",
-                        producto_buscado=contexto.get("producto"),
-                        marca_buscada=contexto.get("marca"),
-                        encontrado=True,
+                        producto_buscado=resultado["planificacion"].get("producto"),
+                        marca_buscada=resultado["planificacion"].get("marca"),
+                        encontrado=inventario_fallback.get("encontrado", False),
                         respuesta_enviada=resultado["respuesta"],
                     )
+                    if inventario_fallback.get("encontrado"):
+                        session_store.set_contexto(session_id, {
+                            "producto": resultado["planificacion"].get("producto"),
+                            "marca": resultado["planificacion"].get("marca"),
+                            "talla": resultado["planificacion"].get("talla"),
+                            "color": resultado["planificacion"].get("color"),
+                            "modelo": contexto.get("modelo"),
+                            "material": contexto.get("material"),
+                            "genero": contexto.get("genero"),
+                            "cantidad_disponible": inventario_fallback.get("cantidad_disponible"),
+                            "variantes": inventario_fallback.get("variantes_disponibles"),
+                            "precio": inventario_fallback.get("precio") or inventario_fallback.get("_precio"),
+                        })
                     self._actualizar_historial(session_id, mensaje, resultado["respuesta"])
                     return resultado
 
