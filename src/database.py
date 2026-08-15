@@ -348,9 +348,6 @@ def _format_variantes(
     """Formatea las variantes como strings legibles, incluyendo agotadas."""
     result = []
 
-    # Primero añadir los exactos que coinciden con los filtros
-    exactos_ids = {r["id"] for r in exactos} if exactos and "id" in exactos[0].keys() else set()
-
     for v in variantes:
         talla = v.get("talla", "")
         color = v.get("color", "")
