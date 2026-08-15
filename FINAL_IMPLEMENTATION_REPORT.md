@@ -211,3 +211,53 @@ TIA MARY: Si, en TIA MARY tenemos jeans Levi's disponibles. Tenemos en tallas 32
 Los tests de integracion con LLM (`TestPlanner`, `TestPlannerMultiTurn`, `TestResponder`, `TestResponderMultiTurn`) requieren Ollama corriendo con `llama3.1:8b`. Se pueden ejecutar con:
 ```bash
 py -m pytest tests/ -v
+```
+
+---
+
+## ADDENDUM — Estado tras Fase 0 (Critica), Fase 1 (Alta) y Fase 2 (Media)
+
+Este documento describia el estado del proyecto ANTES de las fases de seguridad y
+correccion posteriores (`conversation_architecture_review.md` cubria unicamente
+los 11 "Problemas" originales). Esta seccion refleja el estado real verificado
+tras C1-C3, A1-A4 y M1-M6.
+
+### Tareas completadas (verificadas con tests)
+
+| Tarea | Descripcion | Archivo(s) principal(es) |
+|---|---|---|
+| C1 | Aislamiento de estado por `session_id` (elimino singleton compartido) | `src/session_store.py`, `src/pipeline.py` |
+| C2 | `FLASK_DEBUG` seguro por defecto, dependiente de entorno | `src/config.py` |
+| C3 | `FLASK_HOST` seguro por defecto (`127.0.0.1`), dependiente de entorno | `src/config.py` |
+| A1 | `/api/webhook` protegido con firma HMAC-SHA256 (mecanismo generico) | `src/api.py`, `src/config.py` |
+| A2 | `POST /api/pautas` protegido con token de administrador (fail-closed) | `src/api.py`, `src/config.py` |
+| A3 | `buscar_producto` exige coincidencia exacta de filtros especificados | `src/database.py` |
+| A4 | `_fallback_seguimiento` reconstruye plan y reconsulta inventario real | `src/pipeline.py` |
+| M1 | Version de modelo unificada (`llama3.1:8b`) en `config.py` y `README.md` | `src/config.py`, `README.md` |
+| M2 | `PlannerOutput.accion` restringido a `Literal` (enum real en schema) | `src/planner.py` |
+| M3 | Orden de actualizacion de historial revisado y mantenido (documentado) | `src/pipeline.py` |
+| M4 | Pautas inyectadas en prompt acotadas a `MAX_PAUTAS_EN_PROMPT` | `src/learning.py`, `src/database.py` |
+| M5 | `precio == 0` distinguido de `precio` ausente (3 puntos corregidos) | `src/responder.py`, `src/pipeline.py` |
+
+### Pendientes conocidos (NO resueltos, fuera de alcance de las fases ejecutadas)
+
+* Fixtures de `tests/test_planner.py::TestPlannerMultiTurn` usan el schema
+  antiguo (`talla_o_variante`) en sus mensajes de historial simulado,
+  desalineado con el schema real ampliado (`talla` + campos nuevos).
+  Provoca fallos no deterministas en tests de seguimiento multiturno.
+  Pendiente de decision explicita para corregir.
+* El panel de administracion (`ADMIN_HTML`, funcion `guardarPauta()`) no
+  envia el header `Authorization` requerido desde A2 — el boton "Agregar
+  Pauta" del panel queda no funcional (401) hasta que se actualice el JS
+  o se documente el flujo de token para uso administrativo.
+* `GET /api/pautas` permanece publico (solo se protegio `POST`, que es el
+  vector de escritura/prompt injection).
+* El mecanismo de A1 es una firma HMAC-SHA256 generica, no una integracion
+  real de un proveedor de WhatsApp (Twilio/Meta) — el proyecto aun no tiene
+  proveedor definitivo (ver docstring de `webhook()` en `src/api.py`).
+
+### Regla de estado
+
+El roadmap C1-M6 esta completo. Los pendientes listados arriba son defectos
+operativos derivados de esas mismas implementaciones, no tareas sin iniciar
+del roadmap original — se documentan aqui para que no queden ocultos.

@@ -464,17 +464,23 @@ def guardar_pauta(tipo: str, contenido: str) -> int:
 
 
 def get_pautas_activas(tipo: Optional[str] = None) -> list[dict]:
-    """Obtiene las pautas activas, opcionalmente filtradas por tipo."""
+    """
+    Obtiene las pautas activas, opcionalmente filtradas por tipo.
+    Ordena por creado_en DESC, con id DESC como desempate: creado_en tiene
+    resolucion de 1 segundo (datetime('now') de SQLite), por lo que varias
+    pautas creadas en el mismo segundo necesitan id (autoincremental) para
+    determinar cual es realmente mas reciente.
+    """
     conn = _get_connection()
     try:
         if tipo:
             cursor = conn.execute(
-                "SELECT * FROM pautas WHERE activo = 1 AND tipo = ? ORDER BY creado_en DESC",
+                "SELECT * FROM pautas WHERE activo = 1 AND tipo = ? ORDER BY creado_en DESC, id DESC",
                 (tipo,),
             )
         else:
             cursor = conn.execute(
-                "SELECT * FROM pautas WHERE activo = 1 ORDER BY creado_en DESC"
+                "SELECT * FROM pautas WHERE activo = 1 ORDER BY creado_en DESC, id DESC"
             )
         return [dict(row) for row in cursor.fetchall()]
     finally:

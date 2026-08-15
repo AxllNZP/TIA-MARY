@@ -13,6 +13,13 @@ OLLAMA_NUM_PREDICT_PLANNER = 200  # Max tokens de salida para el Planner
 OLLAMA_NUM_PREDICT_RESPONDER = 150  # Max tokens de salida para el Responder
 OLLAMA_NUM_CTX = 2048  # Tamano del contexto (tokens de entrada)
 
+# Limite de pautas inyectadas en el prompt (M4). El esquema de 'pautas' no
+# tiene campo de prioridad/peso/expiracion, asi que se usa el orden ya
+# existente (creado_en DESC) y se toman las N mas recientes. Evita que el
+# prompt crezca indefinidamente y deje sin margen a mensaje/historial/
+# respuesta dentro de OLLAMA_NUM_CTX. No trunca el texto de cada pauta.
+MAX_PAUTAS_EN_PROMPT = 8
+
 # Archivos de prompts
 PROMPT_DIR = "prompts"
 PLANNER_PROMPT_FILE = "planner_prompt.txt"

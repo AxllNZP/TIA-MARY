@@ -97,3 +97,75 @@ class TestSessionIsolation:
         ctx_nueva = store.get_contexto("usuario_C")  # sesion nunca usada
         assert ctx_nueva["producto"] is None
         assert ctx_nueva["marca"] is None
+
+class TestOrdenHistorialM3:
+    """
+    Pruebas de M3: el historial que 'recibiria' el Responder en un turno
+    dado debe contener solo los turnos ANTERIORES (sin el mensaje actual
+    duplicado), y tras persistir el turno actual, el historial acumulado
+    no debe perder, duplicar ni desordenar ningun mensaje.
+    Simula el flujo real de pipeline.procesar_mensaje() usando
+    session_store directamente, sin requerir Ollama.
+    """
+
+    def test_historial_en_turno_2_no_incluye_mensaje_actual_duplicado(self):
+        """
+        Al procesar el turno 2, el historial leido ANTES de generar la
+        respuesta (lo que recibiria el Responder) debe tener exactamente
+        el turno 1 (2 mensajes), sin el mensaje del turno 2 todavia.
+        """
+        store = SessionStore()
+        session_id = "usuario_test"
+
+        # Turno 1 completo (simulando el fin de procesar_mensaje)
+        store.append_historial(session_id, "Tienen zapatillas Nike talla 42?", "Si, 3 unidades.")
+
+        # Turno 2: lo que el pipeline leeria ANTES de llamar al Responder
+        historial_para_responder = store.get_historial(session_id)
+
+        assert len(historial_para_responder) == 2  # solo el turno 1 (user+assistant)
+        assert historial_para_responder[0]["content"] == "Tienen zapatillas Nike talla 42?"
+        assert historial_para_responder[1]["content"] == "Si, 3 unidades."
+        # El mensaje del turno 2 ("cuanto cuesta?") NO debe estar aqui todavia
+        contenidos = [m["content"] for m in historial_para_responder]
+        assert "cuanto cuesta?" not in contenidos
+
+    def test_historial_acumulado_sin_duplicados_tras_dos_turnos(self):
+        """Tras completar 2 turnos, el historial debe tener 4 mensajes, sin duplicados."""
+        store = SessionStore()
+        session_id = "usuario_test"
+
+        store.append_historial(session_id, "Tienen zapatillas Nike talla 42?", "Si, 3 unidades.")
+        store.append_historial(session_id, "cuanto cuesta?", "S/ 250.00.")
+
+        historial_final = store.get_historial(session_id)
+
+        assert len(historial_final) == 4
+        contenidos = [m["content"] for m in historial_final]
+        assert contenidos == [
+            "Tienen zapatillas Nike talla 42?",
+            "Si, 3 unidades.",
+            "cuanto cuesta?",
+            "S/ 250.00.",
+        ]
+        assert len(contenidos) == len(set(contenidos))  # sin duplicados
+
+    def test_orden_cronologico_se_preserva(self):
+        """Los mensajes deben quedar en el orden exacto en que ocurrieron."""
+        store = SessionStore()
+        session_id = "usuario_test"
+
+        store.append_historial(session_id, "primero", "respuesta uno")
+        store.append_historial(session_id, "segundo", "respuesta dos")
+        store.append_historial(session_id, "tercero", "respuesta tres")
+
+        historial = store.get_historial(session_id)
+        roles = [m["role"] for m in historial]
+        contenidos = [m["content"] for m in historial]
+
+        assert roles == ["user", "assistant"] * 3
+        assert contenidos == [
+            "primero", "respuesta uno",
+            "segundo", "respuesta dos",
+            "tercero", "respuesta tres",
+        ]

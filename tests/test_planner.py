@@ -75,7 +75,20 @@ class TestSchemaValidation:
     def test_schema_accion_es_string(self):
         """El campo accion debe ser de tipo string."""
         props = PLANNER_SCHEMA.get("properties", {})
-        assert props["accion"]["type"] == "string"
+        assert props["accion"].get("type") == "string"
+
+    def test_schema_accion_restringe_valores_permitidos(self):
+        """
+        El campo accion debe estar restringido (enum) a los 4 valores
+        validos, para que Ollama no pueda generar acciones arbitrarias (M2).
+        """
+        props = PLANNER_SCHEMA.get("properties", {})
+        valores_permitidos = {
+            "consultar_stock", "pedir_aclaracion",
+            "no_relacionado", "consultar_catalogo",
+        }
+        assert "enum" in props["accion"], "accion debe declarar un enum en el schema"
+        assert set(props["accion"]["enum"]) == valores_permitidos
 
     def test_schema_cantidad_es_integer_o_null(self):
         """El campo cantidad_solicitada debe ser integer o null."""
@@ -125,7 +138,79 @@ class TestSchemaValidation:
         assert model.producto is None
         assert model.color is None
 
+        
 
+class TestAccionRestringida:
+    """
+    Pruebas de M2: PlannerOutput.accion debe aceptar unicamente las 4
+    acciones validas, y una accion fuera de ese conjunto no debe ser
+    aceptada silenciosamente en ningun punto del contrato.
+    """
+
+    @pytest.mark.parametrize("accion_valida", [
+        "consultar_stock", "pedir_aclaracion", "no_relacionado", "consultar_catalogo",
+    ])
+    def test_pydantic_acepta_las_4_acciones_validas(self, accion_valida):
+        """Cada una de las 4 acciones validas debe pasar la validacion de Pydantic."""
+        data = {
+            "accion": accion_valida,
+            "producto": None, "marca": None, "talla": None, "color": None,
+            "modelo": None, "material": None, "genero": None,
+            "cantidad_solicitada": None, "precio_consultado": False,
+            "consultar_variantes": False, "atributo_faltante": None,
+            "mensaje_aclaracion": None,
+        }
+        model = PlannerOutput(**data)
+        assert model.accion == accion_valida
+
+    def test_pydantic_rechaza_accion_no_permitida(self):
+        """
+        Una accion fuera del conjunto permitido (Literal) debe ser rechazada
+        por Pydantic con un error de validacion, NO aceptada silenciosamente.
+        """
+        from pydantic import ValidationError
+
+        data = {
+            "accion": "comprar_ahora",  # accion inventada, fuera del schema
+            "producto": None, "marca": None, "talla": None, "color": None,
+            "modelo": None, "material": None, "genero": None,
+            "cantidad_solicitada": None, "precio_consultado": False,
+            "consultar_variantes": False, "atributo_faltante": None,
+            "mensaje_aclaracion": None,
+        }
+        with pytest.raises(ValidationError):
+            PlannerOutput(**data)
+
+    def test_normalize_result_registra_accion_invalida_no_la_oculta(self, caplog):
+        """
+        _normalize_result (red de seguridad del camino de fallback) debe
+        registrar (log warning) cuando recibe una accion invalida, en vez
+        de silenciarla sin dejar rastro.
+        """
+        import logging
+
+        planner = Planner.__new__(Planner)  # evita __init__ (no requiere OllamaClient)
+
+        with caplog.at_level(logging.WARNING):
+            resultado = planner._normalize_result({"accion": "comprar_ahora"})
+
+        assert resultado["accion"] == "no_relacionado"  # fallback seguro se mantiene
+        assert any(
+            "accion invalida" in registro.message.lower()
+            for registro in caplog.records
+        ), "Se esperaba un warning registrando la accion invalida detectada"
+
+    def test_normalize_result_no_registra_advertencia_con_accion_valida(self, caplog):
+        """Una accion valida no debe generar ninguna advertencia."""
+        import logging
+
+        planner = Planner.__new__(Planner)
+
+        with caplog.at_level(logging.WARNING):
+            resultado = planner._normalize_result({"accion": "consultar_stock"})
+
+        assert resultado["accion"] == "consultar_stock"
+        assert len(caplog.records) == 0
 class TestPlanner:
     """Pruebas de integracion para el Planner (requieren Ollama corriendo)."""
 

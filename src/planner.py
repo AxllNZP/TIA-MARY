@@ -8,11 +8,14 @@ Decide que accion debe tomar el sistema:
 """
 
 import json
+import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .config import PROMPT_DIR, PLANNER_PROMPT_FILE, OLLAMA_NUM_PREDICT_PLANNER
 from .ollama_client import OllamaClient, parse_json_response
@@ -101,7 +104,12 @@ class PlannerOutput(BaseModel):
     Se usa para generar el JSON Schema que se pasa al parametro `format` de Ollama.
     Solo extraccion de entidades — NO genera lenguaje natural.
     """
-    accion: str = Field(
+    accion: Literal[
+        "consultar_stock",
+        "pedir_aclaracion",
+        "no_relacionado",
+        "consultar_catalogo",
+    ] = Field(
         description="consultar_stock | pedir_aclaracion | no_relacionado | consultar_catalogo"
     )
     producto: Optional[str] = Field(
@@ -254,11 +262,22 @@ class Planner:
         """
         Normaliza el resultado del LLM: valida accion, mapea talla_o_variante a talla
         para retrocompatibilidad, y asegura que los booleanos tengan valor.
+
+        Con el schema restringido (Literal) de PlannerOutput, generate_structured()
+        ya rechaza acciones invalidas via jsonschema.validate() y reintenta. Esta
+        validacion aqui es una red de seguridad solo para el camino de fallback
+        (parse_json_response, parseo manual sin garantia de schema). Si ocurre,
+        se registra explicitamente en vez de silenciarse.
         """
         valid_actions = {"consultar_stock", "pedir_aclaracion", "no_relacionado", "consultar_catalogo"}
         accion = result.get("accion", "no_relacionado")
 
         if accion not in valid_actions:
+            logger.warning(
+                "Planner: accion invalida recibida del LLM (fuera de schema): %r. "
+                "Se usara 'no_relacionado' como fallback seguro.",
+                accion,
+            )
             accion = "no_relacionado"
 
         # Mapear talla a talla_o_variante para retrocompatibilidad

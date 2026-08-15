@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import database as db
-from .config import FEEDBACK_PATH
+from .config import FEEDBACK_PATH, MAX_PAUTAS_EN_PROMPT
 
 
 class LearningEngine:
@@ -23,9 +23,10 @@ class LearningEngine:
     def get_pautas_planner(self) -> str:
         """
         Retorna las pautas activas para el Planner, formateadas para inyectar
-        en el system prompt.
+        en el system prompt. Acotadas a MAX_PAUTAS_EN_PROMPT (M4), priorizando
+        las mas recientes (db.get_pautas_activas ya ordena por creado_en DESC).
         """
-        pautas = db.get_pautas_activas(tipo="planner")
+        pautas = db.get_pautas_activas(tipo="planner")[:MAX_PAUTAS_EN_PROMPT]
         if not pautas:
             return ""
 
@@ -37,12 +38,14 @@ class LearningEngine:
     def get_pautas_responder(self) -> str:
         """
         Retorna las pautas activas para el Responder, formateadas para inyectar
-        en el system prompt.
+        en el system prompt. Acotadas a MAX_PAUTAS_EN_PROMPT en total (M4),
+        combinando 'responder' + 'general' y priorizando las mas recientes
+        de cada tipo antes de truncar el conjunto combinado.
         """
         pautas = db.get_pautas_activas(tipo="responder")
         pautas_generales = db.get_pautas_activas(tipo="general")
 
-        todas = pautas + pautas_generales
+        todas = (pautas + pautas_generales)[:MAX_PAUTAS_EN_PROMPT]
         if not todas:
             return ""
 

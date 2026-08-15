@@ -110,7 +110,75 @@ class TestResponder:
                 resultado_inventario={"cantidad_disponible": 5},
             )
 
+class TestBuildInputDataPrecio:
+    """
+    Pruebas de M5: _build_input_data debe distinguir precio ausente (None)
+    de precio=0 (valor legitimo), sin tratar 0 como falsy.
+    No requieren Ollama (metodo puro sobre un dict).
+    """
 
+    @pytest.fixture
+    def responder(self):
+        return Responder.__new__(Responder)  # evita __init__ (no requiere OllamaClient)
+
+    def test_precio_cero_se_conserva(self, responder):
+        """precio=0 debe conservarse como 0, no caer a _precio ni a None."""
+        data = responder._build_input_data(
+            mensaje_cliente="cuanto cuesta?",
+            producto_buscado="polo promocional",
+            resultado_inventario={
+                "encontrado": True,
+                "cantidad_disponible": 5,
+                "precio": 0,
+                "_precio": 99.0,  # no deberia usarse: precio ya esta presente (0)
+                "variantes_disponibles": None,
+            },
+        )
+        assert data["resultado_inventario"]["precio"] == 0
+        assert data["resultado_inventario"]["precio"] is not None
+
+    def test_precio_normal_se_conserva(self, responder):
+        """Un precio normal (no cero) debe conservarse tal cual."""
+        data = responder._build_input_data(
+            mensaje_cliente="cuanto cuesta?",
+            producto_buscado="zapatillas Nike",
+            resultado_inventario={
+                "encontrado": True,
+                "cantidad_disponible": 3,
+                "precio": 10,
+                "_precio": None,
+                "variantes_disponibles": None,
+            },
+        )
+        assert data["resultado_inventario"]["precio"] == 10
+
+    def test_precio_ausente_usa_fallback_precio_legacy(self, responder):
+        """precio=None debe caer al fallback _precio (retrocompatibilidad)."""
+        data = responder._build_input_data(
+            mensaje_cliente="cuanto cuesta?",
+            producto_buscado="jean Levi's",
+            resultado_inventario={
+                "encontrado": True,
+                "cantidad_disponible": 2,
+                "precio": None,
+                "_precio": 180.0,
+                "variantes_disponibles": None,
+            },
+        )
+        assert data["resultado_inventario"]["precio"] == 180.0
+
+    def test_precio_y_precio_legacy_ambos_ausentes(self, responder):
+        """Si ni precio ni _precio existen, el resultado debe ser None (no error)."""
+        data = responder._build_input_data(
+            mensaje_cliente="cuanto cuesta?",
+            producto_buscado="producto sin precio",
+            resultado_inventario={
+                "encontrado": False,
+                "cantidad_disponible": None,
+                "variantes_disponibles": None,
+            },
+        )
+        assert data["resultado_inventario"]["precio"] is None
 class TestResponderMultiTurn:
     """Pruebas multi-turno para el Responder con historial (requieren Ollama)."""
 

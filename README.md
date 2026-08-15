@@ -44,7 +44,7 @@ Las pautas se inyectan automaticamente en los prompts del Planner y Responder **
 |---|---|---|
 | Python | 3.10+ | Probado con 3.14 |
 | Ollama | v0.30+ | Motor LLM local |
-| Modelo | llama3.2:3b | ~2 GB, espanol funcional |
+| Modelo | llama3.1:8b | ~4.7 GB, mejor seguimiento de schema JSON (ver src/config.py) |
 
 ---
 
@@ -67,7 +67,7 @@ pip install -r requirements.txt
 Descargar Ollama desde https://ollama.com/download e instalar. Luego descargar el modelo:
 
 ```bash
-ollama pull llama3.2:3b
+ollama pull llama3.1:8b
 ```
 
 Ollama debe estar corriendo en segundo plano (normalmente se inicia automaticamente al instalar). Verificar:
@@ -76,7 +76,7 @@ Ollama debe estar corriendo en segundo plano (normalmente se inicia automaticame
 ollama list
 ```
 
-Debe mostrar `llama3.2:3b` en la lista.
+Debe mostrar `llama3.1:8b` en la lista.
 
 ### 4. Inicializar la base de datos
 
@@ -250,10 +250,10 @@ ollama serve
 
 O abre la aplicacion Ollama desde el menu de inicio de Windows.
 
-### "El modelo 'llama3.2:3b' no esta disponible"
+### "El modelo 'llama3.1:8b' no esta disponible"
 
 ```bash
-ollama pull llama3.2:3b
+ollama pull llama3.1:8b
 ```
 
 ### Error de encoding/emojis en terminal

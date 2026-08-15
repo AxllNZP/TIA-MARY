@@ -172,7 +172,9 @@ class Pipeline:
 
         if inventario.get("encontrado"):
             cantidad = inventario.get("cantidad_disponible")
-            precio = inventario.get("precio") or inventario.get("_precio")
+            precio = inventario.get("precio")
+            if precio is None:
+                precio = inventario.get("_precio")
             variantes = inventario.get("variantes_disponibles")
 
             if any(p in msg for p in ["cuantas", "cuantos", "unidades", "cantidad", "disponibles"]):
@@ -247,6 +249,15 @@ class Pipeline:
         }
         mensaje_lower = mensaje.lower().strip()
         contexto = session_store.get_contexto(session_id)
+        # DECISION M3: 'historial' contiene solo turnos ANTERIORES a proposito.
+        # El turno actual (mensaje del cliente) se envia por separado como
+        # user_message al Responder (ver generate_response_with_history /
+        # OllamaClient._build_messages), nunca dentro de history. Incluirlo
+        # tambien en history duplicaria el mensaje en la conversacion enviada
+        # a Ollama. La respuesta al turno actual no puede existir antes de
+        # generarse, por lo que el turno completo (mensaje+respuesta) recien
+        # se persiste al final de este metodo, quedando listo para la
+        # SIGUIENTE invocacion. Este orden es correcto, no un defecto.
         historial = session_store.get_historial(session_id)
         
         try:
@@ -391,6 +402,10 @@ class Pipeline:
 
             # === 6. Actualizar contexto de sesion (Problema 5: NO limpiar si no se encuentra) ===
             if inventario.get("encontrado"):
+                precio_inventario = inventario.get("precio")
+                if precio_inventario is None:
+                    precio_inventario = inventario.get("_precio")
+
                 contexto = {
                     "producto": merged_plan.get("producto"),
                     "marca": merged_plan.get("marca"),
@@ -401,7 +416,7 @@ class Pipeline:
                     "genero": merged_plan.get("genero"),
                     "cantidad_disponible": inventario.get("cantidad_disponible"),
                     "variantes": inventario.get("variantes_disponibles"),
-                    "precio": inventario.get("precio") or inventario.get("_precio"),
+                    "precio": precio_inventario,
                 }
                 session_store.set_contexto(session_id, contexto)
             # NO limpiar contexto si no se encuentra — mantener el anterior (Problema 5)

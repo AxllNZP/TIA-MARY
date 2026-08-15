@@ -215,14 +215,17 @@ class Responder:
         Construye el JSON que se envia al LLM.
         Incluye el precio del inventario (Problema 3: antes no se enviaba).
         """
+        precio = resultado_inventario.get("precio")
+        if precio is None:
+            precio = resultado_inventario.get("_precio")
+
         return {
             "mensaje_cliente": mensaje_cliente,
             "producto_buscado": producto_buscado,
             "resultado_inventario": {
                 "encontrado": resultado_inventario.get("encontrado"),
                 "cantidad_disponible": resultado_inventario.get("cantidad_disponible"),
-                "precio": resultado_inventario.get("precio")
-                or resultado_inventario.get("_precio"),  # NUEVO: incluir precio
+                "precio": precio,
                 "variantes_disponibles": resultado_inventario.get(
                     "variantes_disponibles"
                 ),
