@@ -59,12 +59,9 @@ class Pipeline:
         self.client = client or OllamaClient()
         self.planner = Planner(client=self.client)
         self.responder = Responder(client=self.client)
-        self._pautas_planner_cache = ""
-        self._pautas_responder_cache = ""
         # Contexto e historial ya NO son estado de instancia: se leen/escriben
         # por session_id via session_store, aislados entre usuarios.
         # Historial de chat: ultimos 10 mensajes (5 turnos cliente+asistente)
-        self._historial_chat = []
 
     def _refresh_pautas(self):
         """Refresca las pautas desde la BD (se llama antes de cada consulta)."""
@@ -221,7 +218,7 @@ class Pipeline:
                     encontrado=True,
                     respuesta_enviada=respuesta,
                 )
-                self._actualizar_historial(mensaje, respuesta)
+                self._actualizar_historial(session_id, mensaje, respuesta)
                 return resultado
 
             # === 1. FILTRO RAPIDO: Producto fuera de contexto (sin LLM) ===
@@ -242,7 +239,7 @@ class Pipeline:
                     encontrado=False,
                     respuesta_enviada=respuesta,
                 )
-                self._actualizar_historial(mensaje, respuesta)
+                self._actualizar_historial(session_id, mensaje, respuesta)
                 return resultado
 
             # === 2. PLANNER con historial real + salida estructurada ===
@@ -252,7 +249,7 @@ class Pipeline:
 
             plan = self.planner.classify_with_history(
                 mensaje=mensaje,
-                history=self._historial_chat,
+                history=historial,
                 system_prompt=prompt_con_pautas,
             )
             resultado["planificacion"] = plan
@@ -261,17 +258,17 @@ class Pipeline:
             if plan["accion"] != "consultar_stock":
                 # FALLBACK DE EMERGENCIA: si el Planner dice no_relacionado pero
                 # el mensaje parece de seguimiento y hay contexto, usar fallback
-                if plan["accion"] == "no_relacionado" and self._parece_seguimiento(mensaje):
-                    resultado = self._fallback_seguimiento(mensaje)
+                if plan["accion"] == "no_relacionado" and self._parece_seguimiento(mensaje, contexto):
+                    resultado = self._fallback_seguimiento(mensaje, contexto)
                     resultado["consulta_id"] = db.registrar_consulta(
                         mensaje_cliente=mensaje,
                         accion="consultar_stock",
-                        producto_buscado=self._contexto_sesion.get("producto"),
-                        marca_buscada=self._contexto_sesion.get("marca"),
+                        producto_buscado=contexto.get("producto"),
+                        marca_buscada=contexto.get("marca"),
                         encontrado=True,
                         respuesta_enviada=resultado["respuesta"],
                     )
-                    self._actualizar_historial(mensaje, resultado["respuesta"])
+                    self._actualizar_historial(session_id, mensaje, resultado["respuesta"])
                     return resultado
 
                 # Respuestas para pedir_aclaracion y no_relacionado
@@ -315,11 +312,11 @@ class Pipeline:
                     encontrado=False,
                     respuesta_enviada=respuesta,
                 )
-                self._actualizar_historial(mensaje, respuesta)
+                self._actualizar_historial(session_id, mensaje, respuesta)
                 return resultado
 
             # === 4. Merge de atributos con contexto de sesion ===
-            merged_plan = self._merge_atributos(plan)
+            merged_plan = self._merge_atributos(plan, contexto)
 
             # === 5. Consultar inventario real (SQLite) con atributos merged ===
             inventario = consultar_stock(merged_plan)
@@ -327,7 +324,7 @@ class Pipeline:
 
             # === 6. Actualizar contexto de sesion (Problema 5: NO limpiar si no se encuentra) ===
             if inventario.get("encontrado"):
-                self._contexto_sesion = {
+                contexto = {
                     "producto": merged_plan.get("producto"),
                     "marca": merged_plan.get("marca"),
                     "talla": merged_plan.get("talla"),
@@ -339,6 +336,7 @@ class Pipeline:
                     "variantes": inventario.get("variantes_disponibles"),
                     "precio": inventario.get("precio") or inventario.get("_precio"),
                 }
+                session_store.set_contexto(session_id, contexto)
             # NO limpiar contexto si no se encuentra — mantener el anterior (Problema 5)
 
             # === 7. Generar respuesta con historial ===
@@ -361,12 +359,12 @@ class Pipeline:
                     mensaje_cliente=mensaje,
                     producto_buscado=producto_buscado,
                     resultado_inventario=inventario,
-                    history=self._historial_chat,
+                    history=historial,
                 )
             else:
                 # Producto no encontrado — ofrecer variantes si hay
-                if self._contexto_sesion.get("variantes"):
-                    variantes_str = ", ".join(self._contexto_sesion["variantes"][:5])
+                if contexto.get("variantes"):
+                    variantes_str = ", ".join(contexto["variantes"][:5])
                     respuesta = (
                         f"No encontre {merged_plan.get('producto') or 'ese producto'}"
                         f"{' de la marca ' + merged_plan['marca'] if merged_plan.get('marca') else ''}"
@@ -414,7 +412,7 @@ class Pipeline:
             except Exception:
                 pass
 
-        self._actualizar_historial(mensaje, resultado.get("respuesta"))
+        self._actualizar_historial(session_id, mensaje, resultado.get("respuesta"))
         return resultado
 
     def _actualizar_historial(self, session_id: str, mensaje_cliente: str, respuesta: str | None):
