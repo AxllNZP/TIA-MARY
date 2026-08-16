@@ -106,10 +106,45 @@ class TestPautasAuth:
         conteo_despues = db.get_estadisticas()["pautas_activas"]
         assert conteo_antes == conteo_despues
 
-    def test_get_pautas_sigue_publico(self, monkeypatch):
-        """GET /api/pautas no requiere autenticacion (fuera de alcance de A2, solo verifica que no se rompio)."""
+    def test_get_pautas_sin_token_rechaza(self, monkeypatch):
+        """
+        GET /api/pautas ahora requiere autenticacion de administrador (pendiente
+        resuelto tras A2): las pautas revelan reglas de negocio/prompt-tuning
+        activas, util para disenar ataques de prompt injection dirigidos.
+        """
         api_module = _cargar_app_con_token(monkeypatch, token="secreto123")
         client = api_module.app.test_client()
 
         resp = client.get("/api/pautas")
+        assert resp.status_code == 401
+
+    def test_get_pautas_con_token_invalido_rechaza(self, monkeypatch):
+        """GET /api/pautas con token incorrecto debe rechazar."""
+        api_module = _cargar_app_con_token(monkeypatch, token="secreto123")
+        client = api_module.app.test_client()
+
+        resp = client.get(
+            "/api/pautas",
+            headers={"Authorization": "Bearer token_incorrecto"},
+        )
+        assert resp.status_code == 401
+
+    def test_get_pautas_con_token_valido_permite_lectura(self, monkeypatch):
+        """GET /api/pautas con token correcto debe retornar la lista de pautas."""
+        api_module = _cargar_app_con_token(monkeypatch, token="secreto123")
+        client = api_module.app.test_client()
+
+        resp = client.get(
+            "/api/pautas",
+            headers={"Authorization": "Bearer secreto123"},
+        )
         assert resp.status_code == 200
+        assert isinstance(resp.get_json(), list)
+
+    def test_get_pautas_sin_token_configurado_rechaza(self, monkeypatch):
+        """Si ADMIN_API_TOKEN no esta configurado, GET tambien debe rechazar (fail-closed)."""
+        api_module = _cargar_app_con_token(monkeypatch, token=None)
+        client = api_module.app.test_client()
+
+        resp = client.get("/api/pautas")
+        assert resp.status_code == 401

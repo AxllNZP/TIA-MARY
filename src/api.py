@@ -141,6 +141,10 @@ ADMIN_HTML = r"""<!DOCTYPE html>
                     <input type="text" name="contenido" placeholder="Ej: Cuando pregunten por 'chompas', trátalo como 'casaca'..." style="flex:1;" required>
                     <button type="submit">➕ Agregar Pauta</button>
                 </div>
+                <div class="flex-row" style="margin-top:8px;">
+                    <input type="password" id="admin-token" placeholder="Token de administrador" style="flex:1;max-width:300px;" required>
+                    <small style="color:#999;">Requerido para agregar pautas. No se guarda al recargar la pagina.</small>
+                </div>
             </form>
             <div id="pautas-lista" style="margin-top:12px;">
                 {% for p in pautas %}
@@ -219,17 +223,23 @@ ADMIN_HTML = r"""<!DOCTYPE html>
             event.preventDefault();
             const form = event.target;
             const formData = new FormData(form);
+            const token = document.getElementById('admin-token').value.trim();
             const data = {
                 tipo: formData.get('tipo'),
                 contenido: formData.get('contenido')
             };
             const resp = await fetch('/api/pautas', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
                 body: JSON.stringify(data)
             });
             if (resp.ok) {
                 location.reload();
+            } else if (resp.status === 401) {
+                alert('Token de administrador invalido o ausente.');
             } else {
                 alert('Error al guardar pauta');
             }
@@ -416,16 +426,16 @@ def feedback():
 
 @app.route("/api/pautas", methods=["GET", "POST"])
 def pautas():
-    """GET: lista pautas activas. POST: crea nueva pauta (requiere admin)."""
+    """GET: lista pautas activas (requiere admin). POST: crea nueva pauta (requiere admin)."""
+    if not _autenticacion_admin_valida():
+        return jsonify({"error": "No autorizado"}), 401
+
     if request.method == "GET":
         tipo = request.args.get("tipo")
         pautas_list = db.get_pautas_activas(tipo=tipo if tipo else None)
         return jsonify([dict(p) for p in pautas_list])
 
     # POST — requiere autenticacion de administrador antes de persistir nada
-    if not _autenticacion_admin_valida():
-        return jsonify({"error": "No autorizado"}), 401
-
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "JSON inválido"}), 400
