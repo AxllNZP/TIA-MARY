@@ -49,13 +49,6 @@ Ejemplos de mensajes aislados (sin historial):
 
 Ejemplos de SEGUIMIENTO (con historial previo en la conversacion):
 
-IMPORTANTE sobre seguimiento: cuando el mensaje de seguimiento menciona
-SOLO una marca (sin repetir el tipo de producto), esa marca reemplaza el
-campo "marca", pero el campo "producto" se HEREDA del turno anterior — NUNCA
-pongas el nombre de la marca en el campo "producto". Por ejemplo, si el
-producto previo era "polo" y el cliente dice "el Adidas?", el resultado debe
-tener producto="polo", marca="Adidas" — NUNCA producto="Adidas".
-
 Conversacion previa:
   Cliente: "Tienen zapatillas Nike talla 42?"
   Asistente: "Si, tenemos 3 unidades disponibles..."
@@ -64,18 +57,12 @@ Nuevos mensajes posibles del cliente:
 - "y en talla 40?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"40","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
 - "cuantas unidades quedan?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
 - "y en blanco?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":"blanco","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-
-Conversacion previa:
-  Cliente: "Tienen jeans Levi's talla 32?"
-  Asistente: "Si, tenemos 3 unidades disponibles..."
-
-Nuevos mensajes posibles del cliente:
-- "solo en talla 34?" -> {"accion":"consultar_stock","producto":"jean","marca":"Levi's","talla":"34","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "cuanto cuesta?" -> {"accion":"consultar_stock","producto":"jean","marca":"Levi's","talla":"32","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":true,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "y de otra talla cuanto cuestan?" -> {"accion":"consultar_stock","producto":"jean","marca":"Levi's","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":true,"consultar_variantes":true,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "y una gorra negra?" -> {"accion":"consultar_stock","producto":"gorra","marca":null,"talla":null,"color":"negro","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "que tallas tienen?" -> {"accion":"consultar_stock","producto":"jean","marca":"Levi's","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":true,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "de que colores?" -> {"accion":"consultar_stock","producto":"jean","marca":"Levi's","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":true,"atributo_faltante":null,"mensaje_aclaracion":null}
+- "solo negro?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":"negro","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
+- "cuanto cuesta?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":true,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
+- "y de otra talla cuanto cuestan?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":true,"consultar_variantes":true,"atributo_faltante":null,"mensaje_aclaracion":null}
+- "y un polo azul?" -> {"accion":"consultar_stock","producto":"polo","marca":null,"talla":null,"color":"azul","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
+- "que tallas tienen?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":true,"atributo_faltante":null,"mensaje_aclaracion":null}
+- "de que colores?" -> {"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":true,"atributo_faltante":null,"mensaje_aclaracion":null}
 
 Conversacion previa:
   Cliente: "Tienen polos azules?"
@@ -84,15 +71,6 @@ Conversacion previa:
 Nuevos mensajes posibles del cliente:
 - "el Lacoste en talla L?" -> {"accion":"consultar_stock","producto":"polo","marca":"Lacoste","talla":"L","color":"azul","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
 - "cuanto cuesta el Tommy?" -> {"accion":"consultar_stock","producto":"polo","marca":"Tommy Hilfiger","talla":null,"color":"azul","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":true,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "y el Nike?" -> {"accion":"consultar_stock","producto":"polo","marca":"Nike","talla":null,"color":"azul","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-
-Conversacion previa:
-  Cliente: "Tienen medias Puma?"
-  Asistente: "Si, tenemos en blanco y negro..."
-
-Nuevos mensajes posibles del cliente:
-- "el Adidas?" -> {"accion":"consultar_stock","producto":"medias","marca":"Adidas","talla":null,"color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
-- "cuantas unidades hay en negro?" -> {"accion":"consultar_stock","producto":"medias","marca":"Puma","talla":null,"color":"negro","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}
 
 Reglas:
 1. Si el cliente pregunta por disponibilidad de un producto (aunque sea informal, con errores o incompleto), usa "accion": "consultar_stock" y extrae la mayor informacion posible en los campos correspondientes. Si un dato no se menciona, ponlo en null.
