@@ -208,6 +208,8 @@ class Planner:
         Clasifica un mensaje usando un system prompt personalizado.
         Permite inyectar pautas de aprendizaje.
         Sin historial (retrocompatible con tests existentes).
+        Usa salida estructurada (JSON Schema) igual que classify_with_history,
+        para que el LLM no pueda responder texto libre no parseable.
 
         Args:
             system_prompt: System prompt a usar (puede incluir pautas).
@@ -216,8 +218,14 @@ class Planner:
         Returns:
             Diccionario con la clasificacion.
         """
-        raw_response = self.client.generate(system_prompt, mensaje)
-        result = parse_json_response(raw_response)
+        options = {"num_predict": OLLAMA_NUM_PREDICT_PLANNER}
+        result = self.client.generate_structured(
+            system_prompt=system_prompt,
+            user_message=mensaje,
+            schema=self.schema,
+            history=None,
+            options=options,
+        )
 
         return self._normalize_result(result)
 

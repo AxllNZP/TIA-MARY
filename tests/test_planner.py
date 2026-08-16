@@ -275,7 +275,7 @@ class TestPlannerMultiTurn:
         """Seguimiento que cambia la talla debe heredar producto+marca del historial."""
         history = [
             {"role": "user", "content": "Tienen zapatillas Nike talla 42?"},
-            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla_o_variante":"42","cantidad_solicitada":null,"mensaje_aclaracion":null}'},
+            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}'},
         ]
         result = planner.classify_with_history("y en talla 40?", history)
         assert result["accion"] == "consultar_stock"
@@ -288,7 +288,7 @@ class TestPlannerMultiTurn:
         """Seguimiento que pregunta por cantidad debe heredar el contexto."""
         history = [
             {"role": "user", "content": "Tienen zapatillas Nike talla 42?"},
-            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla_o_variante":"42","cantidad_solicitada":null,"mensaje_aclaracion":null}'},
+            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}'},
         ]
         result = planner.classify_with_history("cuantas unidades quedan?", history)
         assert result["accion"] == "consultar_stock"
@@ -298,7 +298,7 @@ class TestPlannerMultiTurn:
         """Seguimiento que pregunta por precio debe heredar el contexto."""
         history = [
             {"role": "user", "content": "Tienen zapatillas Nike talla 42?"},
-            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla_o_variante":"42","cantidad_solicitada":null,"mensaje_aclaracion":null}'},
+            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}'},
         ]
         result = planner.classify_with_history("cuanto cuesta?", history)
         assert result["accion"] == "consultar_stock"
@@ -308,7 +308,7 @@ class TestPlannerMultiTurn:
         """Seguimiento que pregunta por otra talla debe heredar producto+marca."""
         history = [
             {"role": "user", "content": "Tienen zapatillas Nike talla 42?"},
-            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla_o_variante":"42","cantidad_solicitada":null,"mensaje_aclaracion":null}'},
+            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"zapatillas","marca":"Nike","talla":"42","color":null,"modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}'},
         ]
         result = planner.classify_with_history("y de otra talla?", history)
         assert result["accion"] == "consultar_stock"
@@ -329,7 +329,7 @@ class TestPlannerMultiTurn:
         """Seguimiento que menciona marca+talla debe heredar producto del contexto."""
         history = [
             {"role": "user", "content": "Tienen polos azules?"},
-            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"polo","marca":null,"talla_o_variante":null,"cantidad_solicitada":null,"mensaje_aclaracion":null}'},
+            {"role": "assistant", "content": '{"accion":"consultar_stock","producto":"polo","marca":null,"talla":null,"color":"azul","modelo":null,"material":null,"genero":null,"cantidad_solicitada":null,"precio_consultado":false,"consultar_variantes":false,"atributo_faltante":null,"mensaje_aclaracion":null}'},
         ]
         result = planner.classify_with_history("el Lacoste en talla L?", history)
         assert result["accion"] == "consultar_stock"
