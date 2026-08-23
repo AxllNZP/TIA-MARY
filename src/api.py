@@ -392,6 +392,31 @@ def webhook_twilio():
     twiml = f"<Response><Message>{respuesta_texto}</Message></Response>"
     return twiml, 200, {"Content-Type": "text/xml"}
 
+@app.route("/api/webhook-twilio", methods=["POST"])
+def webhook_twilio():
+    """
+    Endpoint temporal de PRUEBA para el canal Twilio WhatsApp Sandbox.
+    Twilio envia form-urlencoded (no JSON) y espera respuesta en TwiML (XML),
+    a diferencia del webhook de Meta. Reutiliza el mismo pipeline real,
+    usando el numero remitente ("From") como session_id para aislar
+    cada conversacion en el SessionStore.
+
+    NOTA DE SEGURIDAD: este endpoint NO valida la firma X-Twilio-Signature
+    todavia (a diferencia de /api/webhook que si valida HMAC). Es aceptable
+    para esta fase de pruebas con el Sandbox, pero debe agregarse antes de
+    cualquier uso con datos reales de produccion.
+    """
+    mensaje = request.form.get("Body", "").strip()
+    remitente = request.form.get("From", "default")
+
+    if not mensaje:
+        return "<Response></Response>", 200, {"Content-Type": "text/xml"}
+
+    resultado = pipeline.procesar_mensaje(mensaje, session_id=remitente)
+    respuesta_texto = resultado["respuesta"] or "Disculpa, tuve un problema al procesar tu mensaje."
+
+    twiml = f"<Response><Message>{respuesta_texto}</Message></Response>"
+    return twiml, 200, {"Content-Type": "text/xml"}
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
