@@ -10,12 +10,23 @@ y actualiza unicamente los atributos que cambian, sin perder los anteriores.
 from typing import Optional
 
 from . import database as db
-from .config import NOMBRE_TIENDA
+from .config import NOMBRE_TIENDA, LLM_PROVIDER
 from .inventario import consultar_stock, consultar_catalogo
 from .learning import engine as learning_engine
 from .ollama_client import OllamaClient
+from .groq_client import GroqLLMClient
 from .planner import Planner
 from .responder import Responder
+
+
+def _crear_llm_client():
+    """
+    Crea el cliente LLM segun LLM_PROVIDER ('ollama' o 'groq').
+    Permite cambiar de motor sin tocar codigo, solo con una variable de entorno.
+    """
+    if LLM_PROVIDER == "groq":
+        return GroqLLMClient()
+    return OllamaClient()
 from .session_store import session_store
 
 
@@ -87,7 +98,7 @@ class Pipeline:
     """
 
     def __init__(self, client: Optional[OllamaClient] = None):
-        self.client = client or OllamaClient()
+        self.client = client or _crear_llm_client()
         self.planner = Planner(client=self.client)
         self.responder = Responder(client=self.client)
         # Contexto e historial ya NO son estado de instancia: se leen/escriben

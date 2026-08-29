@@ -16,6 +16,8 @@ from flask import Flask, jsonify, render_template_string, request, send_from_dir
 import hashlib
 import hmac
 
+import requests
+
 from . import database as db
 from .config import (
     FLASK_HOST,
@@ -24,7 +26,32 @@ from .config import (
     NOMBRE_TIENDA,
     ADMIN_API_TOKEN,
     WEBHOOK_SECRET,
+    WHATSAPP_TOKEN,
+    WHATSAPP_PHONE_NUMBER_ID,
+    WHATSAPP_VERIFY_TOKEN,
 )
+
+
+def _enviar_mensaje_whatsapp_meta(destinatario: str, texto: str) -> None:
+    """
+    Envia un mensaje de texto libre via Meta Cloud API al numero indicado.
+    Requiere que exista una ventana de servicio abierta (el cliente escribio antes).
+    """
+    url = f"https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": destinatario,
+        "type": "text",
+        "text": {"body": texto},
+    }
+    try:
+        requests.post(url, headers=headers, json=payload, timeout=10)
+    except requests.RequestException:
+        pass
 from .learning import engine as learning_engine
 from .pipeline import pipeline
 
@@ -393,6 +420,53 @@ def webhook_twilio():
 
     twiml = f"<Response><Message>{respuesta_texto}</Message></Response>"
     return twiml, 200, {"Content-Type": "text/xml"}
+
+
+@app.route("/api/webhook-meta", methods=["GET"])
+def webhook_meta_verify():
+    """
+    Verificacion inicial que Meta exige al guardar el Callback URL.
+    NOTA: endpoint de PRUEBA (numero de prueba de Meta), analogo a
+    /api/webhook-twilio. No valida X-Hub-Signature-256 todavia.
+    """
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN:
+        return challenge, 200
+    return "Forbidden", 403
+
+
+@app.route("/api/webhook-meta", methods=["POST"])
+def webhook_meta():
+    """
+    Endpoint de PRUEBA para Meta Cloud API (numero de prueba). Recibe el
+    mensaje entrante y responde llamando por separado a la API de Meta con
+    el resultado del pipeline real, usando el remitente ("from") como
+    session_id para aislar la conversacion en el SessionStore.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+
+    try:
+        value = data["entry"][0]["changes"][0]["value"]
+        mensajes = value.get("messages")
+        if not mensajes:
+            return jsonify({"status": "ignored"}), 200
+
+        msg = mensajes[0]
+        mensaje = msg.get("text", {}).get("body", "").strip()
+        remitente = msg.get("from", "default")
+
+        if mensaje:
+            resultado = pipeline.procesar_mensaje(mensaje, session_id=remitente)
+            respuesta = resultado["respuesta"] or "Disculpa, tuve un problema al procesar tu mensaje."
+            _enviar_mensaje_whatsapp_meta(remitente, respuesta)
+    except (KeyError, IndexError, TypeError):
+        pass
+
+    return jsonify({"status": "ok"}), 200
+
 
 @app.route("/api/chat", methods=["POST"])
 def chat():

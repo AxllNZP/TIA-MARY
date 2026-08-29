@@ -57,3 +57,13 @@ ADMIN_API_TOKEN = os.environ.get("ADMIN_API_TOKEN")
 # (ej. X-Twilio-Signature con HMAC-SHA1, o X-Hub-Signature-256 de Meta).
 # Sin valor por defecto utilizable: fail-closed si no se configura.
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+
+# Meta WhatsApp Cloud API (prueba de fuego, numero de prueba de Meta)
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+
+# Groq (LLM en la nube, gratis, reemplaza a Ollama en produccion/pruebas reales)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = "llama-3.1-8b-instant"
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")  # "ollama" o "groq"
