@@ -42,6 +42,11 @@ from .config import (
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET_KEY
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 
 # Estado en memoria para el limite de intentos de login (suficiente para
 # un solo administrador; se reinicia si el servidor se reinicia).
@@ -91,8 +96,6 @@ def _enviar_mensaje_whatsapp_meta(destinatario: str, texto: str) -> None:
         pass
 from .learning import engine as learning_engine
 from .pipeline import pipeline
-
-app = Flask(__name__)
 
 
 def _autenticacion_admin_valida() -> bool:
