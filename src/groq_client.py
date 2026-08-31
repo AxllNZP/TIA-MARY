@@ -19,7 +19,7 @@ class GroqLLMClient:
 
     def __init__(self, model: str = GROQ_MODEL, api_key: str = GROQ_API_KEY):
         self.model = model
-        self._client = Groq(api_key=api_key)
+        self._client = Groq(api_key=api_key, timeout=20.0, max_retries=2)
 
     def _build_messages(self, system_prompt, user_message, history=None):
         messages = [{"role": "system", "content": system_prompt}]

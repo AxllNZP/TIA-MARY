@@ -65,5 +65,5 @@ WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
 
 # Groq (LLM en la nube, gratis, reemplaza a Ollama en produccion/pruebas reales)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_MODEL = "openai/gpt-oss-20b"
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")  # "ollama" o "groq"
