@@ -49,6 +49,22 @@ FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "y
 # debe rechazar todas las solicitudes (fail-closed), nunca fail-open.
 ADMIN_API_TOKEN = os.environ.get("ADMIN_API_TOKEN")
 
+# Login del panel /admin. Hash scrypt (nunca la contraseña en texto plano).
+# Fail-closed: sin hash configurado, el login no puede validar a nadie.
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH")
+
+# Clave para firmar la cookie de sesion de Flask. Sin valor por defecto
+# utilizable: sin esto, Flask no puede crear sesiones seguras.
+FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
+
+# Limite de intentos fallidos de login antes de bloqueo temporal, y duracion
+# del bloqueo en segundos.
+LOGIN_MAX_INTENTOS = 5
+LOGIN_BLOQUEO_SEGUNDOS = 300  # 5 minutos
+
+# Duracion maxima de una sesion de administrador, en segundos.
+SESION_ADMIN_DURACION_SEGUNDOS = 7200  # 2 horas
+
 # Secreto compartido para verificar la firma HMAC de /api/webhook.
 # Mecanismo generico (no ligado a un proveedor especifico): el proyecto aun
 # no tiene integracion real de Twilio/Meta (ver docstring de webhook() en

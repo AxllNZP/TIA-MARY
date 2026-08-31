@@ -11,12 +11,16 @@ import json
 import os
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template_string, request, send_from_directory
+from flask import Flask, jsonify, render_template_string, request, send_from_directory, session, redirect
 
 import hashlib
 import hmac
 
 import requests
+
+import time
+from functools import wraps
+from werkzeug.security import check_password_hash
 
 from . import database as db
 from .config import (
@@ -29,7 +33,40 @@ from .config import (
     WHATSAPP_TOKEN,
     WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_VERIFY_TOKEN,
+    ADMIN_PASSWORD_HASH,
+    FLASK_SECRET_KEY,
+    LOGIN_MAX_INTENTOS,
+    LOGIN_BLOQUEO_SEGUNDOS,
+    SESION_ADMIN_DURACION_SEGUNDOS,
 )
+
+app = Flask(__name__)
+app.secret_key = FLASK_SECRET_KEY
+
+# Estado en memoria para el limite de intentos de login (suficiente para
+# un solo administrador; se reinicia si el servidor se reinicia).
+_login_intentos = {"fallos": 0, "bloqueado_hasta": 0}
+
+
+def _login_valido() -> bool:
+    """Verifica si hay una sesion de administrador activa y no expirada."""
+    if not session.get("admin_autenticado"):
+        return False
+    expira_en = session.get("admin_expira_en", 0)
+    if time.time() > expira_en:
+        session.clear()
+        return False
+    return True
+
+
+def requiere_login(vista):
+    """Decorador: redirige a /admin/login si no hay sesion valida."""
+    @wraps(vista)
+    def envoltura(*args, **kwargs):
+        if not _login_valido():
+            return redirect("/admin/login")
+        return vista(*args, **kwargs)
+    return envoltura
 
 
 def _enviar_mensaje_whatsapp_meta(destinatario: str, texto: str) -> None:
@@ -330,7 +367,74 @@ def index():
     return '<meta http-equiv="refresh" content="0;url=/admin">'
 
 
+LOGIN_HTML = r"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ nombre_tienda }} - Iniciar sesión</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .box { background: white; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); width: 320px; }
+        h1 { font-size: 18px; margin-bottom: 20px; }
+        input { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .error { color: #dc3545; font-size: 13px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>🔒 {{ nombre_tienda }} - Panel de Administración</h1>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <input type="password" name="password" placeholder="Contraseña" required autofocus>
+            <button type="submit">Ingresar</button>
+        </form>
+    </div>
+</body>
+</html>"""
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    """Formulario de acceso al panel de administracion."""
+    error = None
+
+    if request.method == "POST":
+        ahora = time.time()
+        if ahora < _login_intentos["bloqueado_hasta"]:
+            restante = int(_login_intentos["bloqueado_hasta"] - ahora)
+            error = f"Demasiados intentos fallidos. Intenta de nuevo en {restante} segundos."
+        elif not ADMIN_PASSWORD_HASH:
+            error = "El panel no tiene contraseña configurada. Contacta al administrador."
+        else:
+            password = request.form.get("password", "")
+            if check_password_hash(ADMIN_PASSWORD_HASH, password):
+                _login_intentos["fallos"] = 0
+                session.clear()
+                session["admin_autenticado"] = True
+                session["admin_expira_en"] = ahora + SESION_ADMIN_DURACION_SEGUNDOS
+                return redirect("/admin")
+            else:
+                _login_intentos["fallos"] += 1
+                if _login_intentos["fallos"] >= LOGIN_MAX_INTENTOS:
+                    _login_intentos["bloqueado_hasta"] = ahora + LOGIN_BLOQUEO_SEGUNDOS
+                    _login_intentos["fallos"] = 0
+                    error = "Demasiados intentos fallidos. Cuenta bloqueada temporalmente."
+                else:
+                    error = "Contraseña incorrecta."
+
+    return render_template_string(LOGIN_HTML, nombre_tienda=NOMBRE_TIENDA, error=error)
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    """Cierra la sesion de administrador."""
+    session.clear()
+    return redirect("/admin/login")
+
+
 @app.route("/admin")
+@requiere_login
 def admin():
     """Panel de administración."""
     stats_data = learning_engine.get_estadisticas()
