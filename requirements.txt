@@ -3,6 +3,9 @@ pytest==9.1.1
 flask==3.1.3
 pydantic==2.13.4
 jsonschema==4.26.0
+# Solo para el servidor de produccion en el VPS (Linux). No se instala/usa
+# en desarrollo local con Windows (gunicorn no soporta Windows).
+gunicorn>=23.0.0; sys_platform != "win32"
 twilio>=9.0.0
 requests>=2.31.0
 groq>=0.11.0

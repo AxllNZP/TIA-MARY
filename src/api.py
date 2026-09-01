@@ -8,6 +8,7 @@ Provee endpoints para:
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -17,6 +18,9 @@ import hashlib
 import hmac
 
 import requests
+
+import secrets
+
 
 import time
 from functools import wraps
@@ -48,9 +52,20 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
 )
 
-# Estado en memoria para el limite de intentos de login (suficiente para
-# un solo administrador; se reinicia si el servidor se reinicia).
-_login_intentos = {"fallos": 0, "bloqueado_hasta": 0}
+logger = logging.getLogger(__name__)
+
+# Estado en memoria para el limite de intentos de login, particionado por
+# IP de origen. Evita que un atacante bloquee al admin legitimo enviando
+# intentos fallidos desde una IP distinta. Se reinicia si el servidor se
+# reinicia. Nota: si en produccion se coloca detras de un reverse proxy,
+# request.remote_addr reflejara la IP del proxy salvo que se configure
+# ProxyFix con X-Forwarded-For confiable (pendiente para el Eje C).
+_login_intentos_por_ip: dict[str, dict] = {}
+
+
+def _obtener_intentos(ip: str) -> dict:
+    """Obtiene (o crea) el registro de intentos de login para una IP."""
+    return _login_intentos_por_ip.setdefault(ip, {"fallos": 0, "bloqueado_hasta": 0})
 
 
 def _login_valido() -> bool:
@@ -112,6 +127,25 @@ def _autenticacion_admin_valida() -> bool:
 
     token_recibido = auth_header[len("Bearer "):].strip()
     return hmac.compare_digest(token_recibido, ADMIN_API_TOKEN)
+
+
+def _generar_csrf_token() -> str:
+    """
+    Genera un token CSRF ligado a la sesion (synchronizer token pattern).
+    Reutiliza el mismo token mientras dure la sesion actual para no invalidar
+    pestañas abiertas simultaneamente.
+    """
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+def _csrf_valido(token_recibido: str | None) -> bool:
+    """Compara en tiempo constante el token recibido contra el de la sesion."""
+    token_sesion = session.get("csrf_token")
+    if not token_sesion or not token_recibido:
+        return False
+    return hmac.compare_digest(token_recibido, token_sesion)
 
 
 def _firma_webhook_valida(cuerpo_crudo: bytes) -> bool:
@@ -389,6 +423,7 @@ LOGIN_HTML = r"""<!DOCTYPE html>
         <h1>🔒 {{ nombre_tienda }} - Panel de Administración</h1>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="password" name="password" placeholder="Contraseña" required autofocus>
             <button type="submit">Ingresar</button>
         </form>
@@ -404,29 +439,49 @@ def admin_login():
 
     if request.method == "POST":
         ahora = time.time()
-        if ahora < _login_intentos["bloqueado_hasta"]:
-            restante = int(_login_intentos["bloqueado_hasta"] - ahora)
+        ip = request.remote_addr or "desconocida"
+        intentos = _obtener_intentos(ip)
+
+        if ahora < intentos["bloqueado_hasta"]:
+            restante = int(intentos["bloqueado_hasta"] - ahora)
             error = f"Demasiados intentos fallidos. Intenta de nuevo en {restante} segundos."
+            logger.warning("Login rechazado (IP bloqueada) - IP=%s restante=%ds", ip, restante)
+        elif not _csrf_valido(request.form.get("csrf_token")):
+            # Token ausente/invalido: no cuenta como intento fallido de
+            # password, es una peticion sin origen verificable.
+            error = "Tu sesion de login expiro. Intenta de nuevo."
+            logger.warning("Login rechazado (CSRF invalido/ausente) - IP=%s", ip)
         elif not ADMIN_PASSWORD_HASH:
             error = "El panel no tiene contraseña configurada. Contacta al administrador."
         else:
             password = request.form.get("password", "")
             if check_password_hash(ADMIN_PASSWORD_HASH, password):
-                _login_intentos["fallos"] = 0
+                intentos["fallos"] = 0
                 session.clear()
                 session["admin_autenticado"] = True
                 session["admin_expira_en"] = ahora + SESION_ADMIN_DURACION_SEGUNDOS
+                logger.info("Login de administrador exitoso - IP=%s", ip)
                 return redirect("/admin")
             else:
-                _login_intentos["fallos"] += 1
-                if _login_intentos["fallos"] >= LOGIN_MAX_INTENTOS:
-                    _login_intentos["bloqueado_hasta"] = ahora + LOGIN_BLOQUEO_SEGUNDOS
-                    _login_intentos["fallos"] = 0
+                intentos["fallos"] += 1
+                logger.warning(
+                    "Login fallido (password incorrecta) - IP=%s intento=%d/%d",
+                    ip, intentos["fallos"], LOGIN_MAX_INTENTOS,
+                )
+                if intentos["fallos"] >= LOGIN_MAX_INTENTOS:
+                    intentos["bloqueado_hasta"] = ahora + LOGIN_BLOQUEO_SEGUNDOS
+                    intentos["fallos"] = 0
                     error = "Demasiados intentos fallidos. Cuenta bloqueada temporalmente."
+                    logger.warning("IP bloqueada por exceso de intentos - IP=%s duracion=%ds", ip, LOGIN_BLOQUEO_SEGUNDOS)
                 else:
                     error = "Contraseña incorrecta."
 
-    return render_template_string(LOGIN_HTML, nombre_tienda=NOMBRE_TIENDA, error=error)
+    return render_template_string(
+        LOGIN_HTML,
+        nombre_tienda=NOMBRE_TIENDA,
+        error=error,
+        csrf_token=_generar_csrf_token(),
+    )
 
 
 @app.route("/admin/logout")
