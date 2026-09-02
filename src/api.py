@@ -37,6 +37,7 @@ from .config import (
     WHATSAPP_TOKEN,
     WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_VERIFY_TOKEN,
+    WHATSAPP_APP_SECRET,
     ADMIN_PASSWORD_HASH,
     FLASK_SECRET_KEY,
     LOGIN_MAX_INTENTOS,
@@ -165,6 +166,30 @@ def _firma_webhook_valida(cuerpo_crudo: bytes) -> bool:
     firma_recibida = firma_header[len("sha256="):].strip()
     firma_esperada = hmac.new(
         WEBHOOK_SECRET.encode("utf-8"), cuerpo_crudo, hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(firma_recibida, firma_esperada)
+
+
+def _firma_meta_valida(cuerpo_crudo: bytes) -> bool:
+    """
+    Valida la firma HMAC-SHA256 que Meta envia en el header
+    'X-Hub-Signature-256' (formato 'sha256=<hex>'), calculada por Meta sobre
+    el cuerpo crudo usando el App Secret de la app. Confirma que la peticion
+    realmente viene de Meta y no de un tercero que conoce la URL del
+    webhook. Fail-closed: si WHATSAPP_APP_SECRET no esta configurado,
+    siempre rechaza.
+    """
+    if not WHATSAPP_APP_SECRET:
+        return False
+
+    firma_header = request.headers.get("X-Hub-Signature-256", "")
+    if not firma_header.startswith("sha256="):
+        return False
+
+    firma_recibida = firma_header[len("sha256="):].strip()
+    firma_esperada = hmac.new(
+        WHATSAPP_APP_SECRET.encode("utf-8"), cuerpo_crudo, hashlib.sha256
     ).hexdigest()
 
     return hmac.compare_digest(firma_recibida, firma_esperada)
@@ -603,11 +628,17 @@ def webhook_meta_verify():
 @app.route("/api/webhook-meta", methods=["POST"])
 def webhook_meta():
     """
-    Endpoint de PRUEBA para Meta Cloud API (numero de prueba). Recibe el
-    mensaje entrante y responde llamando por separado a la API de Meta con
-    el resultado del pipeline real, usando el remitente ("from") como
-    session_id para aislar la conversacion en el SessionStore.
+    Endpoint para Meta Cloud API. Requiere firma valida en el header
+    'X-Hub-Signature-256' (verificada contra WHATSAPP_APP_SECRET) antes de
+    procesar cualquier dato del cuerpo. Recibe el mensaje entrante y
+    responde llamando por separado a la API de Meta con el resultado del
+    pipeline real, usando el remitente ("from") como session_id para
+    aislar la conversacion en el SessionStore.
     """
+    if not _firma_meta_valida(request.get_data()):
+        logger.warning("Webhook Meta rechazado por firma invalida o ausente - IP=%s", request.remote_addr)
+        return jsonify({"error": "Firma invalida o ausente"}), 401
+
     data = request.get_json(force=True, silent=True) or {}
 
     try:

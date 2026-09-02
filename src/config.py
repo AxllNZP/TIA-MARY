@@ -79,6 +79,13 @@ WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
 
+# App Secret de la app de Meta (Meta for Developers > tu app > Settings >
+# Basic > App Secret). Distinto de WHATSAPP_TOKEN: este NO se usa para
+# enviar mensajes, solo para verificar la firma HMAC (X-Hub-Signature-256)
+# de las peticiones entrantes al webhook y confirmar que vienen de Meta.
+# Sin valor por defecto utilizable: fail-closed si no se configura.
+WHATSAPP_APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET")
+
 # Groq (LLM en la nube, gratis, reemplaza a Ollama en produccion/pruebas reales)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
