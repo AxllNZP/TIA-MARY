@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 from flask import Flask, jsonify, render_template_string, request, send_from_directory, session, redirect
 
@@ -375,17 +376,23 @@ ADMIN_HTML = r"""<!DOCTYPE html>
             event.preventDefault();
             const form = event.target;
             const formData = new FormData(form);
+            const token = document.getElementById('admin-token').value.trim();
             const data = {
                 consulta_id: consultaId,
                 calificacion: formData.get('calificacion')
             };
             const resp = await fetch('/api/feedback', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
                 body: JSON.stringify(data)
             });
             if (resp.ok) {
                 location.reload();
+            } else if (resp.status === 401) {
+                alert('Token de administrador invalido o ausente.');
             } else {
                 alert('Error al guardar feedback');
             }
@@ -605,7 +612,7 @@ def webhook_twilio():
     resultado = pipeline.procesar_mensaje(mensaje, session_id=remitente)
     respuesta_texto = resultado["respuesta"] or "Disculpa, tuve un problema al procesar tu mensaje."
 
-    twiml = f"<Response><Message>{respuesta_texto}</Message></Response>"
+    twiml = f"<Response><Message>{xml_escape(respuesta_texto)}</Message></Response>"
     return twiml, 200, {"Content-Type": "text/xml"}
 
 
@@ -699,7 +706,10 @@ def chat():
 
 @app.route("/api/feedback", methods=["POST"])
 def feedback():
-    """Registra feedback sobre una consulta."""
+    """Registra feedback sobre una consulta (requiere admin)."""
+    if not _autenticacion_admin_valida():
+        return jsonify({"error": "No autorizado"}), 401
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "JSON inválido"}), 400
