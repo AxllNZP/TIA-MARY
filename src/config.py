@@ -90,3 +90,8 @@ WHATSAPP_APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = "openai/gpt-oss-20b"
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")  # "ollama" o "groq"
+# TTL de inactividad para el SessionStore en memoria (contexto conversacional
+# por numero de WhatsApp). Sesiones sin actividad por mas de este tiempo se
+# purgan para evitar crecimiento indefinido de memoria. 24h, coherente con
+# la ventana de servicio de WhatsApp Business.
+SESSION_TTL_SEGUNDOS = 24 * 60 * 60

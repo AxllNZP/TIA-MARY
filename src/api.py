@@ -95,6 +95,9 @@ def _enviar_mensaje_whatsapp_meta(destinatario: str, texto: str) -> None:
     """
     Envia un mensaje de texto libre via Meta Cloud API al numero indicado.
     Requiere que exista una ventana de servicio abierta (el cliente escribio antes).
+    No lanza excepciones hacia el llamador (el webhook debe responder 200 a
+    Meta igual): los fallos de entrega se registran en el log para poder
+    diagnosticarlos, en vez de desaparecer en silencio.
     """
     url = f"https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
     headers = {
@@ -108,9 +111,17 @@ def _enviar_mensaje_whatsapp_meta(destinatario: str, texto: str) -> None:
         "text": {"body": texto},
     }
     try:
-        requests.post(url, headers=headers, json=payload, timeout=10)
-    except requests.RequestException:
-        pass
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        if resp.status_code >= 400:
+            logger.warning(
+                "Meta rechazo el envio de mensaje - destinatario=%s status=%d respuesta=%s",
+                destinatario, resp.status_code, resp.text[:300],
+            )
+    except requests.RequestException as e:
+        logger.warning(
+            "Fallo de red al enviar mensaje via Meta - destinatario=%s error=%s",
+            destinatario, e,
+        )
 from .learning import engine as learning_engine
 from .pipeline import pipeline
 
@@ -619,15 +630,19 @@ def webhook_twilio():
 @app.route("/api/webhook-meta", methods=["GET"])
 def webhook_meta_verify():
     """
-    Verificacion inicial que Meta exige al guardar el Callback URL.
-    NOTA: endpoint de PRUEBA (numero de prueba de Meta), analogo a
-    /api/webhook-twilio. No valida X-Hub-Signature-256 todavia.
+    Verificacion inicial que Meta exige al guardar el Callback URL. Meta no
+    firma este GET (la firma X-Hub-Signature-256 solo aplica al POST de
+    mensajes reales, verificada en webhook_meta() via _firma_meta_valida).
+    Fail-closed si WHATSAPP_VERIFY_TOKEN no esta configurado.
     """
     mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
+    token = request.args.get("hub.verify_token") or ""
     challenge = request.args.get("hub.challenge")
 
-    if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN:
+    if not WHATSAPP_VERIFY_TOKEN:
+        return "Forbidden", 403
+
+    if mode == "subscribe" and hmac.compare_digest(token, WHATSAPP_VERIFY_TOKEN):
         return challenge, 200
     return "Forbidden", 403
 
@@ -768,7 +783,12 @@ def contexto_mejora():
 
 
 def run_server():
-    """Inicia el servidor Flask."""
+    """Inicializa la base de datos y arranca el servidor Flask."""
+    db.init_db()
+    insertados = db.seed_from_json()
+    if insertados:
+        print(f"✅ {insertados} productos cargados desde seed_productos.json")
+
     print(f"\n{'='*60}")
     print(f"  🏪 {NOMBRE_TIENDA} - Asistente de WhatsApp")
     print(f"  Servidor iniciado en http://localhost:{FLASK_PORT}")
@@ -778,10 +798,4 @@ def run_server():
 
 
 if __name__ == "__main__":
-    # Inicializar BD antes de arrancar
-    db.init_db()
-    insertados = db.seed_from_json()
-    if insertados:
-        print(f"✅ {insertados} productos cargados desde seed_productos.json")
-
     run_server()
