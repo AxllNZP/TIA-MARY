@@ -19,11 +19,18 @@ def _cargar_app_con_secret(monkeypatch, secret: str | None):
     """
     Recarga src.config y src.api con WEBHOOK_SECRET controlado,
     ya que api.py lee el secreto al momento de importarse.
+
+    Tambien fuerza ENTORNO=desarrollo: /api/webhook quedo detras del
+    decorador @solo_desarrollo (fail-closed por defecto en "produccion"),
+    y estos tests validan especificamente la logica de firma de ese
+    endpoint, no la bandera de entorno (que tiene su propio test dedicado).
     """
     if secret is None:
         monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
     else:
         monkeypatch.setenv("WEBHOOK_SECRET", secret)
+
+    monkeypatch.setenv("ENTORNO", "desarrollo")
 
     for mod in ("src.config", "src.api"):
         if mod in sys.modules:
@@ -118,6 +125,34 @@ class TestWebhookAuth:
             )
 
         assert resp.status_code == 401
+        mock_procesar.assert_not_called()
+
+    def test_entorno_produccion_deshabilita_el_endpoint(self, monkeypatch):
+        """
+        Fuera de ENTORNO=desarrollo, /api/webhook debe devolver 404 sin
+        importar si la firma es valida (fail-closed de @solo_desarrollo).
+        """
+        monkeypatch.setenv("WEBHOOK_SECRET", "secreto_webhook")
+        monkeypatch.setenv("ENTORNO", "produccion")
+        for mod in ("src.config", "src.api"):
+            if mod in sys.modules:
+                del sys.modules[mod]
+        api_module = importlib.import_module("src.api")
+        client = api_module.app.test_client()
+
+        payload = {"mensaje": "Tienen zapatillas Nike?"}
+        cuerpo = json.dumps(payload).encode("utf-8")
+        firma = _firmar("secreto_webhook", cuerpo)
+
+        with patch.object(api_module.pipeline, "procesar_mensaje") as mock_procesar:
+            resp = client.post(
+                "/api/webhook",
+                data=cuerpo,
+                content_type="application/json",
+                headers={"X-Webhook-Signature": firma},
+            )
+
+        assert resp.status_code == 404
         mock_procesar.assert_not_called()
 
     def test_firma_valida_pero_cuerpo_modificado_rechaza(self, monkeypatch):

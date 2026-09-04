@@ -803,13 +803,17 @@ def pautas():
 
 @app.route("/api/stats", methods=["GET"])
 def stats():
-    """Retorna estadísticas del sistema."""
+    """Retorna estadísticas del sistema. Requiere admin."""
+    if not _autenticacion_admin_valida():
+        return jsonify({"error": "No autorizado"}), 401
     return jsonify(learning_engine.get_estadisticas())
 
 
 @app.route("/api/contexto-mejora", methods=["GET"])
 def contexto_mejora():
-    """Retorna contexto completo para mejora (consultas negativas, pautas, etc.)."""
+    """Retorna contexto completo para mejora (consultas negativas, pautas, etc.). Requiere admin."""
+    if not _autenticacion_admin_valida():
+        return jsonify({"error": "No autorizado"}), 401
     return jsonify(learning_engine.get_contexto_mejora())
 
 
