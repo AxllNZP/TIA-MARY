@@ -95,3 +95,10 @@ LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")  # "ollama" o "groq"
 # purgan para evitar crecimiento indefinido de memoria. 24h, coherente con
 # la ventana de servicio de WhatsApp Business.
 SESSION_TTL_SEGUNDOS = 24 * 60 * 60
+# Entorno de ejecucion. Por defecto "produccion" (fail-closed): los
+# endpoints de prueba sin autenticacion completa (/api/webhook simulador,
+# /api/webhook-twilio sin verificacion de firma todavia) quedan
+# deshabilitados a menos que se configure explicitamente ENTORNO=desarrollo.
+# /api/webhook-meta (el real, con firma verificada) no depende de esta
+# bandera y sigue funcionando en cualquier entorno.
+ENTORNO = os.environ.get("ENTORNO", "produccion")

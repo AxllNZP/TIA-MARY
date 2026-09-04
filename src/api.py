@@ -44,6 +44,7 @@ from .config import (
     LOGIN_MAX_INTENTOS,
     LOGIN_BLOQUEO_SEGUNDOS,
     SESION_ADMIN_DURACION_SEGUNDOS,
+    ENTORNO,
 )
 
 app = Flask(__name__)
@@ -87,6 +88,21 @@ def requiere_login(vista):
     def envoltura(*args, **kwargs):
         if not _login_valido():
             return redirect("/admin/login")
+        return vista(*args, **kwargs)
+    return envoltura
+
+
+def solo_desarrollo(vista):
+    """
+    Decorador: deshabilita el endpoint fuera de ENTORNO=desarrollo,
+    devolviendo 404 (no 403) para no revelar siquiera que el endpoint
+    existe. Protege endpoints de prueba que no deben quedar accesibles
+    en produccion aunque alguien olvide quitarlos del codigo.
+    """
+    @wraps(vista)
+    def envoltura(*args, **kwargs):
+        if ENTORNO != "desarrollo":
+            return jsonify({"error": "No encontrado"}), 404
         return vista(*args, **kwargs)
     return envoltura
 
@@ -251,9 +267,15 @@ ADMIN_HTML = r"""<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🏪 {{ nombre_tienda }} - Panel de Administración</h1>
-        <p>Zona de mejora continua del asistente de WhatsApp</p>
+    <div class="header" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <h1>🏪 {{ nombre_tienda }} - Panel de Administración</h1>
+            <p>Zona de mejora continua del asistente de WhatsApp</p>
+        </div>
+        <form method="POST" action="/admin/logout">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" style="width:auto; background:#dc3545;">Cerrar sesión</button>
+        </form>
     </div>
     <div class="container">
         <!-- Estadísticas -->
@@ -527,9 +549,14 @@ def admin_login():
     )
 
 
-@app.route("/admin/logout")
+@app.route("/admin/logout", methods=["POST"])
+@requiere_login
 def admin_logout():
-    """Cierra la sesion de administrador."""
+    """Cierra la sesion de administrador. Requiere POST + token CSRF para
+    evitar que un tercero pueda desloguear al admin desde otro sitio
+    (ej. un <img src="/admin/logout"> ya no funciona: no es GET)."""
+    if not _csrf_valido(request.form.get("csrf_token")):
+        return redirect("/admin")
     session.clear()
     return redirect("/admin/login")
 
@@ -557,12 +584,14 @@ def admin():
         stats=stats_display,
         consultas=consultas_data,
         pautas=[dict(p) for p in pautas_data],
+        csrf_token=_generar_csrf_token(),
     )
 
 
 # ─── API ENDPOINTS ───
 
 @app.route("/api/webhook", methods=["POST"])
+@solo_desarrollo
 def webhook():
     """
     Endpoint para recibir mensajes de WhatsApp (simula Twilio/Meta webhook).
@@ -601,6 +630,7 @@ def webhook():
 
 
 @app.route("/api/webhook-twilio", methods=["POST"])
+@solo_desarrollo
 def webhook_twilio():
     """
     Endpoint temporal de PRUEBA para el canal Twilio WhatsApp Sandbox.
@@ -644,6 +674,7 @@ def webhook_meta_verify():
 
     if mode == "subscribe" and hmac.compare_digest(token, WHATSAPP_VERIFY_TOKEN):
         return challenge, 200
+    return "Forbidden", 403
     return "Forbidden", 403
 
 
