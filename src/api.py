@@ -23,6 +23,7 @@ import requests
 import secrets
 
 
+import threading
 import time
 from functools import wraps
 from werkzeug.security import check_password_hash
@@ -64,6 +65,40 @@ logger = logging.getLogger(__name__)
 # request.remote_addr reflejara la IP del proxy salvo que se configure
 # ProxyFix con X-Forwarded-For confiable (pendiente para el Eje C).
 _login_intentos_por_ip: dict[str, dict] = {}
+
+# Deduplicacion de mensajes entrantes de Meta por message_id (H1 de la
+# auditoria). Meta puede reintregar el mismo webhook si no recibe 200 a
+# tiempo (ej. el pipeline con LLM tarda mas de lo esperado) o ante errores
+# transitorios; sin esto, el mismo mensaje del cliente se procesaria y
+# respondería dos veces. Estado en memoria con TTL, protegido con Lock
+# porque gunicorn corre con varios threads/workers (ver wsgi.py) y dos
+# reintentos casi simultaneos podrian evaluarse a la vez. Se reinicia si el
+# servidor se reinicia: aceptable, ventana de riesgo minima.
+_meta_message_ids_procesados: dict[str, float] = {}
+_meta_dedup_lock = threading.Lock()
+_META_DEDUP_TTL_SEGUNDOS = 300  # 5 minutos: cubre la ventana tipica de reintentos de Meta
+
+
+def _mensaje_meta_ya_procesado(message_id: str) -> bool:
+    """
+    Registra message_id como procesado y retorna True si YA se habia visto
+    antes dentro de la ventana TTL (duplicado a ignorar). Purga entradas
+    vencidas en cada llamada; volumen bajo, no requiere hilo de fondo.
+    """
+    ahora = time.time()
+    with _meta_dedup_lock:
+        vencidos = [
+            mid for mid, ts in _meta_message_ids_procesados.items()
+            if ahora - ts > _META_DEDUP_TTL_SEGUNDOS
+        ]
+        for mid in vencidos:
+            del _meta_message_ids_procesados[mid]
+
+        if message_id in _meta_message_ids_procesados:
+            return True
+
+        _meta_message_ids_procesados[message_id] = ahora
+        return False
 
 
 def _obtener_intentos(ip: str) -> dict:
@@ -675,7 +710,6 @@ def webhook_meta_verify():
     if mode == "subscribe" and hmac.compare_digest(token, WHATSAPP_VERIFY_TOKEN):
         return challenge, 200
     return "Forbidden", 403
-    return "Forbidden", 403
 
 
 @app.route("/api/webhook-meta", methods=["POST"])
@@ -703,6 +737,18 @@ def webhook_meta():
         msg = mensajes[0]
         mensaje = msg.get("text", {}).get("body", "").strip()
         remitente = msg.get("from", "default")
+        message_id = msg.get("id")
+
+        # H1: si Meta reintrega el mismo mensaje (message_id repetido dentro
+        # de la ventana TTL), no se vuelve a invocar el pipeline ni a
+        # reenviar respuesta. Si el mensaje no trae "id" (payload atipico),
+        # se procesa igual que antes: no hay como deduplicar sin ese dato.
+        if message_id and _mensaje_meta_ya_procesado(message_id):
+            logger.info(
+                "Webhook Meta duplicado ignorado - message_id=%s remitente=%s",
+                message_id, remitente,
+            )
+            return jsonify({"status": "duplicado_ignorado"}), 200
 
         if mensaje:
             resultado = pipeline.procesar_mensaje(mensaje, session_id=remitente)

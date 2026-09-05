@@ -104,6 +104,11 @@ class Pipeline:
         # Contexto e historial ya NO son estado de instancia: se leen/escriben
         # por session_id via session_store, aislados entre usuarios.
         # Historial de chat: ultimos 10 mensajes (5 turnos cliente+asistente)
+        # Se inicializan vacios aqui (y no solo dentro de _refresh_pautas)
+        # para que el atributo exista siempre desde la construccion del
+        # objeto, aunque _refresh_pautas() aun no se haya llamado.
+        self._pautas_planner_cache = ""
+        self._pautas_responder_cache = ""
 
     def _refresh_pautas(self):
         """Refresca las pautas desde la BD (se llama antes de cada consulta)."""

@@ -8,24 +8,35 @@ de exponer el sistema fuera de desarrollo local.
 
 ---
 
-## 1. Proveedor real de WhatsApp (PENDIENTE DE DECISION)
+## 1. Proveedor real de WhatsApp (Meta implementado; Twilio pendiente de decision)
 
-El proyecto aun NO tiene un proveedor de WhatsApp conectado. El endpoint
-`/api/webhook` actualmente "simula" el webhook (ver docstring en
-`src/api.py`) y esta protegido con un mecanismo de firma HMAC-SHA256
-generico (`WEBHOOK_SECRET`), no con la verificacion nativa de ningun
-proveedor.
+Meta (WhatsApp Cloud API) YA esta conectado e implementado: el endpoint
+`/api/webhook-meta` verifica la firma HMAC-SHA256 nativa de Meta
+(`X-Hub-Signature-256`) contra `WHATSAPP_APP_SECRET`, y envia respuestas
+reales via Meta Graph API (ver `_enviar_mensaje_whatsapp_meta` en
+`src/api.py`). Segun el README, fue probado end-to-end con trafico real.
 
-**Decision requerida:** elegir entre Twilio o Meta (WhatsApp Cloud API)
-antes de conectar un numero real.
+El endpoint separado `/api/webhook-twilio` sigue siendo solo un sandbox de
+prueba: no valida `X-Twilio-Signature` todavia (ver docstring en
+`src/api.py`) y queda deshabilitado (404) fuera de `ENTORNO=desarrollo`.
+
+`/api/webhook` (el generico, protegido con `WEBHOOK_SECRET`) sigue siendo
+un simulador de webhook para pruebas locales, no un proveedor real.
+
+**Decision requerida:** ¿se necesita soportar Twilio ademas de Meta, o se
+retira `/api/webhook-twilio` del proyecto? Si se decide soportarlo, falta
+implementar la verificacion de `X-Twilio-Signature` antes de usarlo con
+datos reales.
 
 | Aspecto | Twilio | Meta (WhatsApp Cloud API) |
 |---|---|---|
 | Costo | Cobra por mensaje + markup sobre tarifa de Meta | Tarifa directa de Meta, generalmente mas barata |
 | Setup | Cuenta Twilio + numero de WhatsApp Business aprobado | Cuenta Meta Business + numero verificado, proceso de aprobacion propio |
-| Header de firma | `X-Twilio-Signature` (HMAC-SHA1, firma URL+params) | `X-Hub-Signature-256` (HMAC-SHA256, firma body crudo) |
+| Header de firma | `X-Twilio-Signature` (HMAC-SHA1, firma URL+params) — NO implementado aun | `X-Hub-Signature-256` (HMAC-SHA256, firma body crudo) — implementado y verificado |
 | Formato de payload | `application/x-www-form-urlencoded` | JSON anidado (`entry[].changes[].value.messages[]`) |
+| Estado actual | Sandbox de prueba, sin firma verificada | Implementado y probado con trafico real |
 
-**Impacto tecnico de la decision:** integrar cualquiera de los dos requiere
-reescribir el parsing de `webhook()` en `src/api.py` (no solo la
-verificacion de firma) — el formato del payload
+**Impacto tecnico de la decision (si se decide soportar Twilio en serio):**
+agregar verificacion de `X-Twilio-Signature` (HMAC-SHA1 sobre URL+params,
+distinto al mecanismo de Meta) en `webhook_twilio()`, ya que el parsing del
+payload (`request.form`, TwiML de salida) ya esta resuelto.

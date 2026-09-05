@@ -1,0 +1,12 @@
+# Bytecode de Python
+__pycache__/
+*.pyc
+
+# Cache de pytest
+.pytest_cache/
+
+# Base de datos SQLite generada en runtime (se recrea con `py main.py initdb`)
+data/tienda.db
+
+# Secretos / variables de entorno locales
+.env
