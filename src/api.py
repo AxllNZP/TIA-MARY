@@ -56,6 +56,18 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
 )
 
+@app.after_request
+def _agregar_headers_seguridad(response):
+    """
+    Headers de seguridad aplicados a toda respuesta (H13). X-Frame-Options
+    evita que /admin y /admin/login puedan embeberse en un <iframe> de un
+    sitio de terceros (clickjacking). X-Content-Type-Options evita que el
+    navegador reinterprete el tipo de contenido declarado.
+    """
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
 logger = logging.getLogger(__name__)
 
 # Estado en memoria para el limite de intentos de login, particionado por

@@ -231,7 +231,9 @@ Entra a `http://localhost:5000/admin` — te va a redirigir a `/admin/login`. In
 1. Averigua la IP de tu PC: `ipconfig` (busca `IPv4 Address`, ej: `192.168.1.45`)
 2. Setea `set FLASK_HOST=0.0.0.0` antes de arrancar el servidor (por defecto solo escucha en `127.0.0.1`, para que no quede expuesto en la red sin querer)
 3. Inicia el servidor: `py main.py server`
-4. Desde el celular, abre el navegador y ve a `http://192.168.1.45:5000/admin`
+4. Desde el celular, abre el navegador y ve a `http://192.168.1.45:5000/api/chat` con una herramienta que permita enviar POST (ej. una app de pruebas HTTP), o intégralo con el chat de prueba del panel
+
+**Importante sobre `/admin` en este escenario:** la cookie de sesión del panel administrativo se envía únicamente sobre HTTPS (`SESSION_COOKIE_SECURE=True`, por diseño — protege la sesión de administrador de ser interceptada en la red). Sobre `http://192.168.x.x:5000/admin` (HTTP plano, IP no-localhost) el navegador no reenvía esa cookie, así que el login no persistirá: tras autenticarte, la siguiente petición no te reconocerá como logueado. Para probar el panel `/admin` completo desde el celular necesitas HTTPS real (ej. un túnel como `ngrok http 5000`) o acceder desde `localhost` en la propia PC. El endpoint `/api/chat` (sin sesión, sin cookie) sí funciona normalmente sobre HTTP plano en LAN.
 
 ### Conectar un número real de WhatsApp (Meta Cloud API)
 

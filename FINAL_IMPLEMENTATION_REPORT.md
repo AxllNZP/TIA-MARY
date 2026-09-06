@@ -246,12 +246,14 @@ tras C1-C3, A1-A4 y M1-M6.
   desalineado con el schema real ampliado (`talla` + campos nuevos).
   Provoca fallos no deterministas en tests de seguimiento multiturno.
   Pendiente de decision explicita para corregir.
-* El panel de administracion (`ADMIN_HTML`, funcion `guardarPauta()`) no
-  envia el header `Authorization` requerido desde A2 — el boton "Agregar
-  Pauta" del panel queda no funcional (401) hasta que se actualice el JS
-  o se documente el flujo de token para uso administrativo.
-* `GET /api/pautas` permanece publico (solo se protegio `POST`, que es el
-  vector de escritura/prompt injection).
+* [CORREGIDO] El panel de administracion (`ADMIN_HTML`, funcion
+  `guardarPauta()`) SI envia el header `Authorization: Bearer <token>`
+  (toma el valor del campo `admin-token` del formulario). Esta seccion
+  describia un estado anterior del codigo, ya superado.
+* [CORREGIDO] `GET /api/pautas` tambien requiere autenticacion de
+  administrador (`Authorization: Bearer <ADMIN_API_TOKEN>`), no solo
+  `POST`. Ver `tests/test_pautas_auth.py::test_get_pautas_sin_token_rechaza`.
+  Esta seccion describia un estado anterior del codigo, ya superado.
 * El mecanismo de A1 es una firma HMAC-SHA256 generica, no una integracion
   real de un proveedor de WhatsApp (Twilio/Meta) — el proyecto aun no tiene
   proveedor definitivo (ver docstring de `webhook()` en `src/api.py`).

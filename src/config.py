@@ -1,5 +1,7 @@
 # Configuración del asistente de WhatsApp para TÍA MARY
 
+import os
+
 # Nombre de la tienda (usado en las respuestas)
 NOMBRE_TIENDA = "TÍA MARY"
 
@@ -42,6 +44,7 @@ FLASK_PORT = 5000
 # DEBUG solo se activa si se declara explicitamente (ej. desarrollo local).
 # Por defecto, desactivado -> evita exponer el debugger de Werkzeug.
 FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+
 
 
 # Token de administrador para proteger endpoints sensibles (ej. /api/pautas).

@@ -7,6 +7,9 @@ Mantiene memoria conversacional por sesion que conserva el contexto
 y actualiza unicamente los atributos que cambian, sin perder los anteriores.
 """
 
+import logging
+import re
+
 from typing import Optional
 
 from . import database as db
@@ -15,6 +18,7 @@ from .inventario import consultar_stock, consultar_catalogo
 from .learning import engine as learning_engine
 from .ollama_client import OllamaClient
 from .groq_client import GroqLLMClient
+logger = logging.getLogger(__name__)
 from .planner import Planner
 from .responder import Responder
 
@@ -56,6 +60,16 @@ PALABRAS_CATALOGO = [
     "muestrame lo que", "que tienen", "que hay", "lista de productos",
     "que ofrecen", "que clases de", "que tipo de productos",
     "que ropa tienen", "que calzado tienen", "que accesorios tienen",
+]
+
+
+# Categorias de producto reales de la tienda. Se usan para evitar que una
+# frase ambigua de PALABRAS_CATALOGO (ej. "que tienen") dispare la
+# respuesta de catalogo general cuando el cliente en realidad pregunta por
+# un producto especifico (ej. "que tienen en zapatillas Nike?").
+PRODUCTOS_CONOCIDOS = [
+    "zapatilla", "zapatillas", "polo", "polos", "jean", "jeans",
+    "medias", "gorra", "gorras", "casaca", "casacas",
 ]
 
 # Colores conocidos para extraccion heuristica en el fallback de emergencia
@@ -119,7 +133,7 @@ class Pipeline:
         """Detecta si el mensaje pregunta por un producto que la tienda no vende."""
         msg = mensaje.lower()
         for p in PRODUCTOS_FUERA_CONTEXTO:
-            if p in msg:
+            if re.search(r"\b" + re.escape(p) + r"\b", msg):
                 return p
         return None
 
@@ -128,8 +142,13 @@ class Pipeline:
         Detecta si el mensaje es una consulta de catalogo general
         ("que venden?", "muestrame el catalogo", etc.).
         Se hace sin LLM para 100% de confiabilidad y cero latencia.
+        No debe activarse si el cliente ya menciona un producto especifico
+        (ej. "que tienen en zapatillas Nike?" es consulta de stock, no de
+        catalogo general).
         """
         msg = mensaje.lower().strip()
+        if any(re.search(r"\b" + re.escape(prod) + r"\b", msg) for prod in PRODUCTOS_CONOCIDOS):
+            return False
         return any(p in msg for p in PALABRAS_CATALOGO)
 
     def _parece_seguimiento(self, mensaje: str, contexto: dict) -> bool:
@@ -250,6 +269,18 @@ class Pipeline:
         }
 
     def procesar_mensaje(self, mensaje: str, session_id: str = "default") -> dict:
+        """
+        Punto de entrada publico (H2): serializa el procesamiento por
+        session_id para evitar que dos mensajes casi simultaneos del mismo
+        numero de WhatsApp lean el mismo contexto inicial y se pisen al
+        escribir el resultado uno sobre el otro. Sesiones distintas se
+        siguen procesando de forma concurrente entre si (lock independiente
+        por session_id, ver SessionStore.get_lock).
+        """
+        with session_store.get_lock(session_id):
+            return self._procesar_mensaje_interno(mensaje, session_id)
+
+    def _procesar_mensaje_interno(self, mensaje: str, session_id: str = "default") -> dict:
         """
         Procesa un mensaje completo a traves del pipeline.
         Pasa el historial de conversacion real al Planner y al Responder.
@@ -479,6 +510,21 @@ class Pipeline:
                         f"Puedo ayudarte a buscar algo similar si me dices que tipo de producto te interesa."
                     )
 
+            # Salvaguarda: nunca dejar que una respuesta vacia/solo-espacios
+            # del LLM llegue a registrarse o enviarse al cliente (H9). Puede
+            # ocurrir si el modelo devuelve contenido vacio sin lanzar
+            # excepcion (no cubierto por el except general de mas abajo).
+            if not respuesta or not respuesta.strip():
+                logger.warning(
+                    "Respuesta vacia del LLM - session_id=%s mensaje=%r",
+                    session_id, mensaje,
+                )
+                respuesta = (
+                    f"Hola! En {NOMBRE_TIENDA} estamos listos para atenderte. "
+                    "Por el momento tuve un problemita para redactar la respuesta, "
+                    "pero dime que buscas y te ayudo en un momento."
+                )
+
             resultado["respuesta"] = respuesta
 
             # === 8. Registrar consulta ===
@@ -494,6 +540,10 @@ class Pipeline:
             )
 
         except Exception as e:
+            logger.error(
+                "Fallo no controlado procesando mensaje - session_id=%s error=%s",
+                session_id, e, exc_info=True,
+            )
             resultado["error"] = str(e)
             resultado["respuesta"] = (
                 f"Hola! En {NOMBRE_TIENDA} estamos listos para atenderte. "

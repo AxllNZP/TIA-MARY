@@ -166,6 +166,7 @@ class OllamaClient:
         opts = self._build_options(options)
 
         last_error = None
+        raw_content = None
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -227,14 +228,20 @@ class OllamaClient:
                 continue
 
         # Si llegamos aqui, todos los intentos fallaron
-        # Ultimo intento: usar el parser manual como fallback final
-        try:
-            return parse_json_response(raw_content)
-        except Exception:
-            raise ValueError(
-                f"No se pudo generar un JSON valido tras {max_retries} intentos. "
-                f"Ultimo error: {last_error}"
-            )
+        # Ultimo intento: usar el parser manual como fallback final, solo si
+        # se llego a recibir alguna respuesta cruda del modelo (raw_content
+        # puede seguir siendo None si todos los intentos fallaron antes de
+        # obtener respuesta, ej. errores de conexion ya relanzados arriba).
+        if raw_content is not None:
+            try:
+                return parse_json_response(raw_content)
+            except Exception:
+                pass
+
+        raise ValueError(
+            f"No se pudo generar un JSON valido tras {max_retries} intentos. "
+            f"Ultimo error: {last_error}"
+        )
 
 
 def parse_json_response(raw_response: str) -> dict:

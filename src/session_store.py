@@ -49,12 +49,22 @@ class SessionStore:
         self._lock = threading.Lock()
         self._ttl_segundos = ttl_segundos
         self._contador_llamadas = 0
+        # Locks por session_id (H2): permiten serializar el ciclo completo
+        # read-process-write de una misma sesion en Pipeline.procesar_mensaje,
+        # sin bloquear el procesamiento de sesiones distintas entre si.
+        # Independientes de self._lock, que solo protege el diccionario
+        # _sessions/_locks en si, no la logica de negocio del Pipeline.
+        self._locks: dict[str, threading.Lock] = {}
 
     def _purgar_expiradas(self) -> None:
         """
         Elimina sesiones sin actividad por mas de self._ttl_segundos.
         Debe llamarse siempre con self._lock ya adquirido (el Lock no es
         reentrante), nunca de forma independiente.
+        Tambien purga el lock por sesion asociado (H2), solo si no esta en
+        uso en este instante (adquisicion no bloqueante): si el lock esta
+        tomado, se deja para la siguiente purga en vez de arriesgar quitarlo
+        mientras una sesion "expirada por reloj" todavia esta procesandose.
         """
         ahora = time.time()
         expiradas = [
@@ -63,6 +73,10 @@ class SessionStore:
         ]
         for sid in expiradas:
             del self._sessions[sid]
+            lock = self._locks.get(sid)
+            if lock is not None and lock.acquire(blocking=False):
+                lock.release()
+                del self._locks[sid]
 
     def _get_or_create(self, session_id: str) -> dict:
         self._contador_llamadas += 1
@@ -80,6 +94,22 @@ class SessionStore:
         else:
             sesion["ultimo_acceso"] = time.time()
         return sesion
+
+    def get_lock(self, session_id: str) -> threading.Lock:
+        """
+        Devuelve (creandolo si no existe) el lock asociado a session_id.
+        Usar como: `with session_store.get_lock(session_id): ...` para
+        serializar el ciclo completo read-process-write de una sesion (H2),
+        evitando que dos mensajes casi simultaneos del mismo numero pisen
+        la actualizacion de contexto uno del otro. No afecta a otras
+        sesiones: cada session_id tiene su propio lock independiente.
+        """
+        with self._lock:
+            lock = self._locks.get(session_id)
+            if lock is None:
+                lock = threading.Lock()
+                self._locks[session_id] = lock
+            return lock
 
     def get_contexto(self, session_id: str) -> dict:
         """Devuelve una COPIA del contexto. Modificarla no afecta el estado
